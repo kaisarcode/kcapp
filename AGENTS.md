@@ -31,10 +31,10 @@ The Lua source is the product. Do not use a `repo/` / `dist/` split.
 ```text
 kcapp/
 ├── AGENTS.md
-├── Makefile
 ├── README.md
 └── projects/
     └── demo/
+        ├── Makefile
         ├── config.json
         ├── src/
         │   └── main.lua
@@ -42,7 +42,7 @@ kcapp/
             └── <arch>/<platform>/
 ```
 
-`bin/` is generated, ephemeral, and must not be tracked. Do not create `.build/`, `dist/`, or `repo/`.
+`bin/` is generated, ephemeral, and must not be tracked. Do not create `.build/`, `dist/`, or `repo/`. There is no global Makefile; each project carries its own self-contained `Makefile`, and builds run from inside the project directory with `make`, `make <arch>/<platform>`, or `make all`.
 
 ## Authoritative plan
 

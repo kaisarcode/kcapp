@@ -6,7 +6,7 @@ It does not compile C, does not rebuild kclib, does not rebuild LuaJIT, and does
 
 ## Usage
 
-From a project directory:
+From the project directory:
 
 ```sh
 make                         # native target
@@ -21,12 +21,6 @@ cd projects/demo
 make
 make x86_64/linux
 make all
-```
-
-From the repository root, select the project explicitly (default `demo`):
-
-```sh
-make PROJECT=NAME <arch>/<platform>
 ```
 
 - `make` composes the native target (detected from the host).
@@ -61,16 +55,16 @@ SG9sYQ==
 ```text
 kcapp/
 ├── AGENTS.md
-├── Makefile
 ├── README.md
 └── projects/
     └── demo/
+        ├── Makefile
         ├── config.json
         └── src/
             └── main.lua
 ```
 
-A project contains only its own Lua source and a minimal `config.json`. Dependencies and the LuaJIT runtime are resolved automatically.
+A project contains its own Lua source, a minimal `config.json`, and its own self-contained `Makefile`. Dependencies and the LuaJIT runtime are resolved automatically.
 
 ## Configuration
 
@@ -84,17 +78,16 @@ Each project declares the kclib dependencies it needs:
 
 ## Dependencies
 
-The Makefile resolves dependencies from sibling repositories by default. Override them per invocation or environment:
+The project's `Makefile` resolves dependencies from sibling repositories by default, relative to the project directory:
 
 ```make
-KCLIB_DIST_DIR ?= ../kclib/dist
-LUAJIT_DIST_DIR ?= ../luajit/dist
+KCLIB_DIST_DIR ?= ../../../kclib/dist
+LUAJIT_DIST_DIR ?= ../../../luajit/dist
 ```
 
-For example, with the repositories together under one parent directory:
+With the repositories together under one parent directory, a bare `make` works. To pick a different dependency location:
 
 ```sh
-make PROJECT=demo x86_64/linux
 make KCLIB_DIST_DIR=/abs/path/kclib/dist x86_64/linux
 ```
 
