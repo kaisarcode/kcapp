@@ -1,4 +1,10 @@
 #!/bin/sh
+# kcapp build tool
+# Summary: Builds a named kcapp project.
+# Author:  KaisarCode
+# Website: https://kaisarcode.com
+# License: GNU General Public License v3.0
+
 set -eu
 
 project=${1:-}
@@ -8,7 +14,7 @@ if [ -z "$project" ]; then
     exit 1
 fi
 
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 root_dir=$(dirname "$script_dir")
 project_dir="$root_dir/proj/$project"
 
