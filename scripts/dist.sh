@@ -130,52 +130,54 @@ generate_manifest()
 
     echo "Generating manifest.json..."
 
-    echo '{' > "$manifest_file"
-    echo "  \"updated_at\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> "$manifest_file"
-    echo "  \"timestamp\": $(date -u +%s)," >> "$manifest_file"
-    echo '  "projects": {' >> "$manifest_file"
+    {
+        echo '{'
+        echo "  \"updated_at\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\","
+        echo "  \"timestamp\": $(date -u +%s),"
+        echo '  "projects": {'
 
-    for project_dir in "$target_dir"/*/; do
-        [ -d "$project_dir" ] || continue
+        for project_dir in "$target_dir"/*/; do
+            [ -d "$project_dir" ] || continue
 
-        project=$(basename "$project_dir")
+            project=$(basename "$project_dir")
 
-        if [ "$first_project" = true ]; then
-            first_project=false
-        else
-            echo ',' >> "$manifest_file"
-        fi
-
-        printf '    "%s": {\n' "$project" >> "$manifest_file"
-        echo '      "packages": {' >> "$manifest_file"
-
-        first_package=true
-
-        for package in "$project_dir"/*.zip; do
-            [ -f "$package" ] || continue
-
-            package_name=$(basename "$package")
-            build_sha256=$(read_package_sha256 "$package")
-
-            if [ "$first_package" = true ]; then
-                first_package=false
+            if [ "$first_project" = true ]; then
+                first_project=false
             else
-                echo ',' >> "$manifest_file"
+                echo ','
             fi
 
-            printf '        "%s": {\n' "$package_name" >> "$manifest_file"
-            printf '          "sha256": "%s"\n' "$build_sha256" >> "$manifest_file"
-            printf '        }' >> "$manifest_file"
+            printf '    "%s": {\n' "$project"
+            echo '      "packages": {'
+
+            first_package=true
+
+            for package in "$project_dir"/*.zip; do
+                [ -f "$package" ] || continue
+
+                package_name=$(basename "$package")
+                build_sha256=$(read_package_sha256 "$package")
+
+                if [ "$first_package" = true ]; then
+                    first_package=false
+                else
+                    echo ','
+                fi
+
+                printf '        "%s": {\n' "$package_name"
+                printf '          "sha256": "%s"\n' "$build_sha256"
+                printf '        }'
+            done
+
+            echo
+            echo '      }'
+            printf '    }'
         done
 
-        echo >> "$manifest_file"
-        echo '      }' >> "$manifest_file"
-        printf '    }' >> "$manifest_file"
-    done
-
-    echo >> "$manifest_file"
-    echo '  }' >> "$manifest_file"
-    echo '}' >> "$manifest_file"
+        echo
+        echo '  }'
+        echo '}'
+    } > "$manifest_file"
 
     return 0
 }
