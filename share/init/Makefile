@@ -20,6 +20,7 @@ SHARE_LUA_DIR := $(PROJECT_DIR)/../../share/lua
 OUT_DIR := $(PROJECT_DIR)/bin
 RUN_C := $(PROJECT_DIR)/../../share/run/run.c
 RUN_INCLUDE_DIR := $(PROJECT_DIR)/../../share/run
+GEN_BRIDGE_API := $(PROJECT_DIR)/../../scripts/gen_bridge_api.lua
 
 KC_LIBS := $(if $(wildcard $(CONFIG)),$(shell awk -v key='"kclib"' '{ buf = buf " " $$0 } END { if (match(buf, key "[[:space:]]*:[[:space:]]*\\[")) { s = substr(buf, RSTART + RLENGTH); while (match(s, /"[^"]*"/)) { v = substr(s, RSTART + 1, RLENGTH - 2); print v; s = substr(s, RSTART + RLENGTH) } } }' "$(CONFIG)"),)
 PLATFORM_EXT_linux := so
@@ -31,7 +32,7 @@ LUAJIT_RUNTIME_macos := libluajit.dylib
 LUAJIT_TARGETS := $(sort $(foreach p,linux windows macos,$(foreach f,$(wildcard $(LUAJIT_DIST_DIR)/*/$(p)/$(LUAJIT_RUNTIME_$(p))),$(patsubst %/,%,$(patsubst $(LUAJIT_DIST_DIR)/%,%,$(dir $f))))))
 
 define target_available
-$(if $(wildcard $(LUAJIT_DIST_DIR)/$(1)/$(LUAJIT_RUNTIME_$(notdir $(1)))),$(if $(foreach d,$(KC_LIBS),$(if $(and $(wildcard $(KCLIB_DIST_DIR)/$(d).c/$(1)/lib$(d).cdef),$(wildcard $(KCLIB_DIST_DIR)/$(d).c/$(1)/lib$(d).$(PLATFORM_EXT_$(notdir $(1))))),,$(d))),,$(1)))
+$(if $(wildcard $(LUAJIT_DIST_DIR)/$(1)/$(LUAJIT_RUNTIME_$(notdir $(1)))),$(1))
 endef
 
 AVAILABLE_TARGETS := $(foreach t,$(LUAJIT_TARGETS),$(if $(call target_available,$(t)),$(t)))
@@ -106,6 +107,8 @@ platform="$${target##*/}"; \
 [ -f '$(CONFIG)' ] || { echo "kcapp: missing config: $(CONFIG)" >&2; exit 1; }; \
 [ -f '$(SRC_DIR)/main.lua' ] || { echo "kcapp: missing source entry point: $(SRC_DIR)/main.lua" >&2; exit 1; }; \
 [ -f '$(SHARE_LUA_DIR)/kcapp.lua' ] || { echo "kcapp: missing shared Lua runtime: $(SHARE_LUA_DIR)/kcapp.lua" >&2; exit 1; }; \
+[ -f '$(SHARE_LUA_DIR)/bridge.lua' ] || { echo "kcapp: missing shared bridge runtime: $(SHARE_LUA_DIR)/bridge.lua" >&2; exit 1; }; \
+[ -f '$(GEN_BRIDGE_API)' ] || { echo "kcapp: missing bridge generator: $(GEN_BRIDGE_API)" >&2; exit 1; }; \
 [ -f '$(RUN_C)' ] || { echo "kcapp: missing launcher source: $(RUN_C)" >&2; exit 1; }; \
 [ -f '$(LUAJIT_INCLUDE_DIR)/lua.h' ] || { echo "kcapp: missing LuaJIT headers: $(LUAJIT_INCLUDE_DIR)" >&2; exit 1; }; \
 case "$$platform" in \
@@ -126,6 +129,7 @@ rm -f "$$out/luajit" "$$out/luajit.exe" "$$out/main.lua"; \
 cp -R '$(SRC_DIR)/.' "$$out/src/"; \
 cp -R '$(SHARE_LUA_DIR)/.' "$$out/share/lua/"; \
 if [ -f '$(README)' ]; then cp '$(README)' "$$out/README.md"; fi; \
+luajit "$(GEN_BRIDGE_API)" "$(KCLIB_DIST_DIR)" "$$arch" "$$platform" "$$out/share/lua/bridge_api.lua" $(KC_LIBS); \
 case "$$platform" in \
 linux) cp "$$ltarget/$$runtime" "$$out/lib/"; ln -sf "$$runtime" "$$out/lib/libluajit-5.1.so.2"; "$$compiler" -std=c11 -I'$(LUAJIT_INCLUDE_DIR)' -I'$(RUN_INCLUDE_DIR)' '$(RUN_C)' -L"$$ltarget" -Wl,-rpath,'$$ORIGIN/lib' -lluajit -o "$$out/$$executable" ;; \
 windows) [ -f "$$ltarget/libluajit.dll.a" ] || { echo "kcapp: missing LuaJIT linker artifact for $$target" >&2; exit 1; }; cp "$$ltarget/$$runtime" "$$out/"; "$$compiler" -std=c11 -I'$(LUAJIT_INCLUDE_DIR)' -I'$(RUN_INCLUDE_DIR)' '$(RUN_C)' "$$ltarget/libluajit.dll.a" -o "$$out/$$executable" ;; \
@@ -134,8 +138,10 @@ esac; \
 for dep in $(KC_LIBS); do \
 	ddir='$(KCLIB_DIST_DIR)/'"$$dep"'.c/'"$$arch"'/'"$$platform"; \
 	cdef="$$ddir/lib$$dep.cdef"; lib="$$ddir/lib$$dep$$lext"; \
-	[ -f "$$cdef" ] || { echo "kcapp: missing cdef for $$dep at $$target: $$cdef" >&2; exit 1; }; \
-	[ -f "$$lib" ] || { echo "kcapp: missing library for $$dep at $$target: $$lib" >&2; exit 1; }; \
+	if [ ! -f "$$cdef" ] || [ ! -f "$$lib" ]; then \
+		echo "kcapp: skipping $$dep for $$target (not available)"; \
+		continue; \
+	fi; \
 	cp "$$cdef" "$$lib" "$$out/lib/"; \
 done; \
 if [ "$$target" = "$(NATIVE_TARGET)" ]; then \

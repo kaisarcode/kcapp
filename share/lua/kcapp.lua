@@ -1,5 +1,5 @@
 -- kcapp.lua
--- Summary: Loads kclib shared libraries for kcapp applications.
+-- Summary: Loads kclib shared libraries and provides WebView bridge for kcapp applications.
 -- Author:  KaisarCode
 -- Website: https://kaisarcode.com
 -- License: GNU General Public License v3.0
@@ -26,6 +26,11 @@ function kcapp.load(name)
     end
 
     return ffi.load("./lib/lib" .. name .. extension)
+end
+
+function kcapp.bridge(window, libs)
+    local bridge = require("bridge")
+    return bridge.install(window, libs)
 end
 
 return kcapp
