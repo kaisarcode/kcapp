@@ -1,6 +1,6 @@
 #!/bin/sh
 # kcapp distribution tool
-# Summary: Packages built kcapp projects into distributable archives.
+# Summary: Packages built kcapp projects and generates distribution metadata.
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: GNU General Public License v3.0
@@ -12,6 +12,9 @@ root_dir=$(dirname "$script_dir")
 proj_dir="$root_dir/proj"
 dist_dir="$root_dir/dist"
 
+# Computes the SHA-256 digest of a file.
+# @param file Path to the file.
+# @return 0 on success; the digest is written to stdout.
 compute_sha256()
 {
     file=$1
@@ -25,39 +28,51 @@ compute_sha256()
     fi
 }
 
-compute_project_sha256()
+# Computes the SHA-256 digest representing a build directory.
+# SHA256SUM.txt itself is excluded from the digest.
+# @param build_dir Build directory.
+# @return 0 on success; the digest is written to stdout.
+compute_build_sha256()
 {
-    project_dir=$1
+    build_dir=$1
     checksum_file=$(mktemp)
 
-    find "$project_dir" -type f -name '*.zip' |
+    find "$build_dir" -type f ! -name 'SHA256SUM.txt' |
         LC_ALL=C sort |
         while IFS= read -r file; do
-            name=$(basename "$file")
-            sha256=$(compute_sha256 "$file")
-            printf '%s  %s\n' "$sha256" "$name"
+            rel_path=${file#"$build_dir"/}
+            file_sha256=$(compute_sha256 "$file")
+            printf '%s  %s\n' "$file_sha256" "$rel_path"
         done > "$checksum_file"
 
-    checksum=$(compute_sha256 "$checksum_file")
+    build_sha256=$(compute_sha256 "$checksum_file")
     rm -f "$checksum_file"
 
-    printf '%s\n' "$checksum"
+    printf '%s\n' "$build_sha256"
 }
 
+# Packages every built project target into a distributable ZIP archive.
+# Each package receives SHA256SUM.txt containing the build digest.
+# @param proj_dir Projects directory.
+# @param dist_dir Distribution directory.
+# @return 0 on success.
 package_artifacts()
 {
-    mkdir -p "$dist_dir"
+    source_dir=$1
+    target_dir=$2
 
-    for project_dir in "$proj_dir"/*; do
+    mkdir -p "$target_dir"
+
+    for project_dir in "$source_dir"/*; do
         [ -d "$project_dir" ] || continue
 
         bin_dir="$project_dir/bin"
         [ -d "$bin_dir" ] || continue
 
         project=$(basename "$project_dir")
-        project_dist="$dist_dir/$project"
+        project_dist="$target_dir/$project"
 
-        echo "dist: packaging $project"
+        echo "Processing $project..."
 
         mkdir -p "$project_dist"
 
@@ -70,50 +85,109 @@ package_artifacts()
                 [ -d "$platform_dir" ] || continue
 
                 platform=$(basename "$platform_dir")
-                package="$project_dist/$project-$platform-$arch.zip"
+                package_name="$project-$platform-$arch.zip"
+                package="$project_dist/$package_name"
+                build_dir=$(mktemp -d)
+
+                cp -R "$platform_dir"/. "$build_dir"/
+
+                build_sha256=$(compute_build_sha256 "$build_dir")
+                printf '%s\n' "$build_sha256" > "$build_dir/SHA256SUM.txt"
 
                 (
-                    cd "$platform_dir"
+                    cd "$build_dir"
                     zip -qr "$package" .
                 )
+
+                rm -rf "$build_dir"
             done
         done
+
+        echo "    [+] Packages collected in $project_dist/"
     done
+
+    return 0
 }
 
+# Reads the build digest stored inside a package.
+# @param package ZIP package path.
+# @return 0 on success; the digest is written to stdout.
+read_package_sha256()
+{
+    package=$1
+
+    unzip -p "$package" SHA256SUM.txt
+}
+
+# Writes manifest.json with timestamps and package build digests.
+# @param dist_dir Distribution directory.
+# @return 0 on success.
 generate_manifest()
 {
-    manifest="$dist_dir/manifest.json"
-    first=true
+    target_dir=$1
+    manifest_file="$target_dir/manifest.json"
+    first_project=true
 
-    echo "dist: generating manifest"
+    echo "Generating manifest.json..."
 
-    {
-        echo '{'
-        echo '  "projects": {'
+    echo '{' > "$manifest_file"
+    echo "  \"updated_at\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> "$manifest_file"
+    echo "  \"timestamp\": $(date -u +%s)," >> "$manifest_file"
+    echo '  "projects": {' >> "$manifest_file"
 
-        for project_dir in "$dist_dir"/*; do
-            [ -d "$project_dir" ] || continue
+    for project_dir in "$target_dir"/*/; do
+        [ -d "$project_dir" ] || continue
 
-            project=$(basename "$project_dir")
-            sha256=$(compute_project_sha256 "$project_dir")
+        project=$(basename "$project_dir")
 
-            if [ "$first" = true ]; then
-                first=false
+        if [ "$first_project" = true ]; then
+            first_project=false
+        else
+            echo ',' >> "$manifest_file"
+        fi
+
+        printf '    "%s": {\n' "$project" >> "$manifest_file"
+        echo '      "packages": {' >> "$manifest_file"
+
+        first_package=true
+
+        for package in "$project_dir"/*.zip; do
+            [ -f "$package" ] || continue
+
+            package_name=$(basename "$package")
+            build_sha256=$(read_package_sha256 "$package")
+
+            if [ "$first_package" = true ]; then
+                first_package=false
             else
-                echo ','
+                echo ',' >> "$manifest_file"
             fi
 
-            printf '    "%s": {\n' "$project"
-            printf '      "sha256": "%s"\n' "$sha256"
-            printf '    }'
+            printf '        "%s": {\n' "$package_name" >> "$manifest_file"
+            printf '          "sha256": "%s"\n' "$build_sha256" >> "$manifest_file"
+            printf '        }' >> "$manifest_file"
         done
 
-        echo
-        echo '  }'
-        echo '}'
-    } > "$manifest"
+        echo >> "$manifest_file"
+        echo '      }' >> "$manifest_file"
+        printf '    }' >> "$manifest_file"
+    done
+
+    echo >> "$manifest_file"
+    echo '  }' >> "$manifest_file"
+    echo '}' >> "$manifest_file"
+
+    return 0
 }
 
-package_artifacts
-generate_manifest
+# Packages project artifacts and generates distribution metadata.
+# @return 0 on success.
+main()
+{
+    package_artifacts "$proj_dir" "$dist_dir"
+    generate_manifest "$dist_dir"
+
+    echo "Done."
+}
+
+main "$@"
