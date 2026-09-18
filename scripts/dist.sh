@@ -120,58 +120,39 @@ read_package_sha256()
     unzip -p "$package" SHA256SUM.txt
 }
 
-# Writes manifest.json with timestamps and package build digests.
-# @param dist_dir Distribution directory.
+# Writes manifest.json for a single project with package build digests.
+# @param project_dist Project distribution directory.
+# @param project Project name.
 # @return 0 on success.
-generate_manifest()
+generate_project_manifest()
 {
-    target_dir=$1
-    manifest_file="$target_dir/manifest.json"
-    first_project=true
+    project_dist=$1
+    project=$2
+    manifest_file="$project_dist/manifest.json"
+    first_package=true
 
-    echo "Generating manifest.json..."
+    echo "Generating $project/manifest.json..."
 
     {
         echo '{'
         echo "  \"updated_at\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\","
         echo "  \"timestamp\": $(date -u +%s),"
-        echo '  "projects": {'
+        echo '  "packages": {'
 
-        for project_dir in "$target_dir"/*/; do
-            [ -d "$project_dir" ] || continue
+        for package in "$project_dist"/*.zip; do
+            [ -f "$package" ] || continue
 
-            project=$(basename "$project_dir")
+            package_name=$(basename "$package")
+            build_sha256=$(read_package_sha256 "$package")
 
-            if [ "$first_project" = true ]; then
-                first_project=false
+            if [ "$first_package" = true ]; then
+                first_package=false
             else
                 echo ','
             fi
 
-            printf '    "%s": {\n' "$project"
-            echo '      "packages": {'
-
-            first_package=true
-
-            for package in "$project_dir"/*.zip; do
-                [ -f "$package" ] || continue
-
-                package_name=$(basename "$package")
-                build_sha256=$(read_package_sha256 "$package")
-
-                if [ "$first_package" = true ]; then
-                    first_package=false
-                else
-                    echo ','
-                fi
-
-                printf '        "%s": {\n' "$package_name"
-                printf '          "sha256": "%s"\n' "$build_sha256"
-                printf '        }'
-            done
-
-            echo
-            echo '      }'
+            printf '    "%s": {\n' "$package_name"
+            printf '      "sha256": "%s"\n' "$build_sha256"
             printf '    }'
         done
 
@@ -188,7 +169,12 @@ generate_manifest()
 main()
 {
     package_artifacts "$proj_dir" "$dist_dir"
-    generate_manifest "$dist_dir"
+
+    for project_dir in "$dist_dir"/*/; do
+        [ -d "$project_dir" ] || continue
+        project=$(basename "$project_dir")
+        generate_project_manifest "$project_dir" "$project"
+    done
 
     echo "Done."
 }
