@@ -12,6 +12,8 @@ From the project directory:
 make                         # native target
 make <arch>/<platform>       # specific target
 make all                     # every available desktop target
+make test                    # run the native test
+make test wine               # run the test under Wine
 ```
 
 Example:
@@ -41,13 +43,13 @@ projects/demo/bin/x86_64/linux/
 From the output directory:
 
 ```sh
-./luajit main.lua "Hola"
+./luajit main.lua "Hello"
 ```
 
 produces:
 
 ```text
-SG9sYQ==
+SGVsbG8=
 ```
 
 ## Layout

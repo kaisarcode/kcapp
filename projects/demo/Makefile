@@ -7,6 +7,8 @@
 KCLIB_DIST_DIR ?= $(abspath $(CURDIR)/../../../kclib/dist)
 LUAJIT_DIST_DIR ?= $(abspath $(CURDIR)/../../../luajit/dist)
 
+WINE ?= wine
+
 PROJECT_DIR := $(CURDIR)
 CONFIG := $(PROJECT_DIR)/config.json
 SRC_DIR := $(PROJECT_DIR)/src
@@ -53,13 +55,18 @@ endif
 
 NATIVE_TARGET := $(NATIVE_ARCH)/$(NATIVE_PLATFORM)
 
+NATIVE_EXE_EXT :=
+ifeq ($(NATIVE_PLATFORM),windows)
+NATIVE_EXE_EXT := .exe
+endif
+
 ifeq ($(filter $(NATIVE_TARGET),$(AVAILABLE_TARGETS)),)
 .DEFAULT_GOAL := help
 else
 .DEFAULT_GOAL := $(NATIVE_TARGET)
 endif
 
-.PHONY: all help
+.PHONY: all help test wine
 all: $(AVAILABLE_TARGETS)
 	@if [ -z '$(AVAILABLE_TARGETS)' ]; then \
 		echo "kcapp: no targets available for this project" >&2; \
@@ -71,10 +78,44 @@ help:
 	@echo '  make                 # compose the native target'
 	@echo '  make <arch>/<platform>'
 	@echo '  make all             # compose every available desktop target'
+	@echo '  make test            # run the native test'
+	@echo '  make test wine       # run the test under Wine'
 	@echo 'Example:'
 	@echo '  make x86_64/linux'
 	@echo 'Output:'
 	@echo '  bin/<arch>/<platform>/'
+
+test:
+	@if [ -n "$(filter wine,$(MAKECMDGOALS))" ]; then \
+		if ! command -v $(WINE) >/dev/null 2>&1; then \
+			echo "Missing Wine runtime: $(WINE)" >&2; \
+			exit 1; \
+		fi; \
+		if [ ! -f $(OUT_DIR)/x86_64/windows/luajit.exe ]; then \
+			echo "Missing Windows artifacts. Run 'make x86_64/windows' or 'make all' first." >&2; \
+			exit 1; \
+		fi; \
+		out=$$(cd $(OUT_DIR)/x86_64/windows && WINEDEBUG=-all $(WINE) luajit.exe main.lua "Hello" 2>/dev/null | tr -d '\r'); \
+		[ "$$out" = "SGVsbG8=" ] || { echo "FAIL: expected SGVsbG8=, got: $$out" >&2; exit 1; }; \
+	else \
+		if [ "$(NATIVE_ARCH)" = "unsupported" ] || [ "$(NATIVE_PLATFORM)" = "unsupported" ]; then \
+			echo "Unsupported native test target $(HOST_ARCH)/$(HOST_SYSTEM)" >&2; \
+			exit 1; \
+		fi; \
+		if [ ! -f $(OUT_DIR)/$(NATIVE_TARGET)/luajit$(NATIVE_EXE_EXT) ]; then \
+			$(MAKE) $(NATIVE_TARGET); \
+		fi; \
+		out=$$(cd $(OUT_DIR)/$(NATIVE_TARGET) && ./luajit$(NATIVE_EXE_EXT) main.lua "Hello"); \
+		[ "$$out" = "SGVsbG8=" ] || { echo "FAIL: expected SGVsbG8=, got: $$out" >&2; exit 1; }; \
+	fi
+	@echo "OK test"
+
+wine:
+	@if [ -z "$(filter test,$(MAKECMDGOALS))" ]; then \
+		echo "Use 'make test wine' to run tests through Wine." >&2; \
+		exit 1; \
+	fi
+	@:
 
 define compose
 @set -eu; \
