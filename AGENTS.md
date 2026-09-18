@@ -37,9 +37,12 @@ kcapp/
 ├── AGENTS.md
 ├── README.md
 ├── scripts/
+│   ├── init.sh
 │   ├── build.sh
 │   └── dist.sh
 ├── share/
+│   ├── init/
+│   │   └── Makefile
 │   ├── lua/
 │   │   └── kcapp.lua
 │   └── run/
@@ -67,6 +70,124 @@ Generated applications include the shared Lua runtime under `share/lua/`. The la
 `dist/` contains distributable application packages.
 
 Each project carries its own self-contained `Makefile`, and composition runs from inside the project directory with `make`, `make <arch>/<platform>`, or `make all`.
+
+## Base application structure
+
+Every kcapp project under `proj/` starts from the same minimal source structure:
+
+```text
+proj/<project>/
+├── Makefile
+├── README.md
+├── config.json
+└── src/
+    └── main.lua
+```
+
+This is the canonical base project structure created by:
+
+```sh
+./scripts/init.sh <project>
+```
+
+`src/main.lua` is the mandatory application entry point.
+
+The complete `src/` directory belongs to the application and may contain additional Lua modules, assets, configuration, templates, or other project-specific resources. Its internal structure must be preserved in generated builds and distributions.
+
+`config.json` declares project configuration. New projects start with no kclib dependencies:
+
+```json
+{
+  "kclib": []
+}
+```
+
+`README.md` is end-user documentation for the application.
+
+`Makefile` owns project build behavior and is created from the authoritative shared project template:
+
+```text
+share/init/Makefile
+```
+
+Do not maintain a second independent initial project Makefile implementation in `scripts/init.sh`.
+
+Generated directories such as `bin/` are not part of the initial project skeleton and are created only by the build.
+
+A generated kcapp has the conceptual runtime layout:
+
+```text
+bin/<arch>/<platform>/
+├── <project>
+├── README.md
+├── src/
+│   └── main.lua
+├── share/
+│   └── lua/
+│       └── kcapp.lua
+└── lib/
+    └── ...
+```
+
+On Windows the executable is `<project>.exe`, and runtime DLL placement may differ where required by the native loader.
+
+The application executable always treats its own real executable directory as the application root and executes:
+
+```text
+src/main.lua
+```
+
+Shared kcapp Lua functionality comes from:
+
+```text
+share/lua/kcapp.lua
+```
+
+Project source must use:
+
+```lua
+local kcapp = require("kcapp")
+```
+
+rather than copying shared kcapp helpers into individual projects.
+
+## Project initialization
+
+`scripts/init.sh <project>` creates a new kcapp project using the canonical base application structure.
+
+It creates only:
+
+```text
+proj/<project>/
+├── Makefile
+├── README.md
+├── config.json
+└── src/
+    └── main.lua
+```
+
+It does not:
+
+* create `bin/`;
+* create or modify `dist/`;
+* run `make`;
+* add kclib dependencies;
+* copy shared runtime source into the project;
+* modify an existing project.
+
+If `proj/<project>` already exists in any form, initialization must stop with a clear diagnostic and leave the existing path untouched.
+
+Do not merge, repair, overwrite, regenerate, or complete existing projects through `init.sh`.
+
+New projects start with:
+
+```json
+{
+  "kclib": []
+}
+```
+
+The generated `src/main.lua` may use `require("kcapp")`, but shared runtime files remain authoritative under `share/` and are copied only into generated build output.
 
 ## Build scripts
 
@@ -161,13 +282,22 @@ Keep each project README specific to the actual application. Do not use a generi
 * Resolve kclib dependencies as `$(KCLIB_DIST_DIR)/NAME.c/<arch>/<platform>/`.
 * Select `libNAME.cdef` and the platform shared library (`.so`, `.dll`, `.dylib`).
 * Compile the shared launcher against the target's prebuilt LuaJIT shared library and copy only the required LuaJIT runtime library.
+* Do not copy the standalone `luajit` or `luajit.exe` executable into application output.
 * If a target directory or any required artifact is missing, fail clearly.
-* Preserve the complete `src/` tree, including nested modules, assets, and configuration. Do not transform Lua code, generate bindings, or generate wrappers.
+* Preserve the complete `src/` tree, including nested modules, assets, and configuration.
+* Do not transform Lua code, generate bindings, or generate wrappers.
 * Copy the shared Lua runtime to `share/lua/` in generated applications without copying it into project source trees.
+* The launcher must resolve the real executable location before deriving the application root, including when invoked through a symlink.
+* The launcher must expose `share/lua` and `src` through Lua's `package.path`.
+* The launcher must execute `src/main.lua` relative to the application root.
 
 ## Structure and dependencies
 
 Use existing project mechanisms before introducing new ones. Keep project behavior local and easy to inspect.
+
+Shared implementation belongs under `share/` only when it represents behavior genuinely common to kcapps.
+
+Do not duplicate shared launcher code, shared Lua runtime code, or the initial project Makefile implementation across individual projects.
 
 ## Tests and documentation
 
