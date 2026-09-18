@@ -1,17 +1,8 @@
 local ffi = require("ffi");
-
-local function load(name)
-    local def = io.open("./lib/lib"..name..".cdef", "r");
-    ffi.cdef(def:read("*a")); def:close();
-    local ext = ".so";
-    if (ffi.os == "Windows") then ext = ".dll";
-    elseif (ffi.os == "OSX") then ext = ".dylib";
-    end
-    return ffi.load("./lib/lib"..name..ext);
-end
+local kcapp = require("kcapp");
 
 local b64 = {};
-local libb64 = load("b64");
+local libb64 = kcapp.load("b64");
 
 function b64.encode(str)
     local val = libb64.kc_b64_encode(str, #str);
@@ -32,4 +23,3 @@ if (arg[1] ~= nil) then
 end
 
 print(b64.encode(input));
-

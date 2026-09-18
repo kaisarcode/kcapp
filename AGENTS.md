@@ -10,6 +10,8 @@ Read the workspace-level `AGENTS.md` first. These rules add kcapp-specific conve
 
 Each composed application exposes its own project-named native executable. The launcher always changes to its application root and runs `src/main.lua` from there.
 
+`share/lua/kcapp.lua` is the shared Lua runtime module for all applications. Project Lua code must use `require("kcapp")` instead of duplicating shared kclib-loading helpers.
+
 ## Main principle
 
 Do not compile again what already exists. `kcapp` composes existing artifacts:
@@ -38,6 +40,8 @@ kcapp/
 │   ├── build.sh
 │   └── dist.sh
 ├── share/
+│   ├── lua/
+│   │   └── kcapp.lua
 │   └── run/
 │       ├── run.c
 │       └── run.h
@@ -57,6 +61,8 @@ kcapp/
 ```
 
 `bin/` is project-local generated output for runnable target directories.
+
+Generated applications include the shared Lua runtime under `share/lua/`. The launcher prepends `share/lua` and `src` module paths to Lua's `package.path`, while retaining the existing path entries.
 
 `dist/` contains distributable application packages.
 
@@ -105,6 +111,8 @@ dist/manifest.json
 ```
 
 This digest is the installed-build identity used by external systems to determine whether an installed project differs from the published build.
+
+Shared Lua runtime files participate in this identity because they are included in every generated application directory.
 
 Do not derive this published build identity from ZIP metadata or from the ZIP file itself. Repacking identical installable contents must not change the build identity.
 
@@ -155,6 +163,7 @@ Keep each project README specific to the actual application. Do not use a generi
 * Compile the shared launcher against the target's prebuilt LuaJIT shared library and copy only the required LuaJIT runtime library.
 * If a target directory or any required artifact is missing, fail clearly.
 * Preserve the complete `src/` tree, including nested modules, assets, and configuration. Do not transform Lua code, generate bindings, or generate wrappers.
+* Copy the shared Lua runtime to `share/lua/` in generated applications without copying it into project source trees.
 
 ## Structure and dependencies
 

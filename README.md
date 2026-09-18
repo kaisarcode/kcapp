@@ -34,6 +34,9 @@ proj/demo/bin/x86_64/linux/
 ├── demo
 ├── src/
 │   └── main.lua
+├── share/
+│   └── lua/
+│       └── kcapp.lua
 └── lib/
     ├── libb64.cdef
     ├── libb64.so
@@ -54,11 +57,7 @@ SGVsbG8=
 
 Every composed application exposes its own native executable (`demo` on Linux and macOS, `demo.exe` on Windows). The executable runs `src/main.lua` relative to its own application directory, so it can be started from any current working directory. The standalone LuaJIT executable is not distributed as an end-user entry point.
 
-With a globally installed LuaJIT, developers can still run the composed source directly:
-
-```sh
-luajit src/main.lua "Hello"
-```
+Each generated application also includes the shared Lua runtime under `share/lua/`. The launcher makes both that directory and the application `src/` tree available through Lua's module search path.
 
 ## Scripts
 
@@ -131,6 +130,9 @@ demo-linux-x86_64.zip
 ├── demo
 ├── src/
 │   └── main.lua
+├── share/
+│   └── lua/
+│       └── kcapp.lua
 ├── lib/
 │   ├── libb64.cdef
 │   ├── libb64.so
@@ -187,6 +189,9 @@ kcapp/
 │       ├── config.json
 │       ├── src/
 │       │   └── main.lua
+│       ├── share/
+│       │   └── lua/
+│       │       └── kcapp.lua
 │       └── bin/
 │           └── <arch>/<platform>/
 └── dist/
@@ -198,6 +203,8 @@ kcapp/
 `proj/` contains application projects. A project contains its Lua source, a minimal `config.json`, and its own self-contained `Makefile`. Dependencies and the LuaJIT runtime are resolved automatically.
 
 The complete project `src/` directory is copied to each application build. This keeps Lua modules, assets, configuration, and nested resources in their original structure.
+
+`share/lua/kcapp.lua` is copied into each generated application. Application code can load shared and local modules with `require`, including `require("kcapp")`, without modifying `package.path` itself.
 
 `bin/` contains generated runnable build targets for a project.
 

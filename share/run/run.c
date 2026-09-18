@@ -104,6 +104,36 @@ static int kc_run_set_arguments(lua_State *state, int argc, char **argv) {
 }
 
 /**
+ * Prepends application module directories to the Lua package path.
+ * @param state Initialized Lua state.
+ * @return Zero on success or non-zero on failure.
+ */
+static int kc_run_set_package_path(lua_State *state) {
+    const char *path;
+
+    lua_getglobal(state, "package");
+    if (!lua_istable(state, -1)) {
+        fprintf(stderr, "kcapp: Lua package table is unavailable\n");
+        lua_pop(state, 1);
+        return 1;
+    }
+    lua_getfield(state, -1, "path");
+    path = lua_tostring(state, -1);
+    if (path == NULL) {
+        fprintf(stderr, "kcapp: Lua package path is unavailable\n");
+        lua_pop(state, 2);
+        return 1;
+    }
+    lua_pushfstring(state,
+                    "./share/lua/?.lua;./share/lua/?/init.lua;"
+                    "./src/?.lua;./src/?/init.lua;%s",
+                    path);
+    lua_setfield(state, -3, "path");
+    lua_pop(state, 1);
+    return 0;
+}
+
+/**
  * Prints the Lua error stored at the top of the stack.
  * @param state Lua state holding an error object.
  * @return Non-zero failure status.
@@ -133,6 +163,10 @@ int kc_run_main(int argc, char **argv) {
         return 1;
     }
     luaL_openlibs(state);
+    if (kc_run_set_package_path(state) != 0) {
+        lua_close(state);
+        return 1;
+    }
     kc_run_set_arguments(state, argc, argv);
     status = luaL_loadfile(state, "src/main.lua");
     if (status == 0) status = lua_pcall(state, 0, LUA_MULTRET, 0);

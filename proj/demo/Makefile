@@ -16,6 +16,7 @@ PROJECT_DIR := $(CURDIR)
 CONFIG := $(PROJECT_DIR)/config.json
 README := $(PROJECT_DIR)/README.md
 SRC_DIR := $(PROJECT_DIR)/src
+SHARE_LUA_DIR := $(PROJECT_DIR)/../../share/lua
 OUT_DIR := $(PROJECT_DIR)/bin
 RUN_C := $(PROJECT_DIR)/../../share/run/run.c
 RUN_INCLUDE_DIR := $(PROJECT_DIR)/../../share/run
@@ -115,19 +116,17 @@ test:
 		if [ ! -f $(OUT_DIR)/$(NATIVE_TARGET)/demo$(NATIVE_EXE_EXT) ]; then \
 			$(MAKE) $(NATIVE_TARGET); \
 		fi; \
-		out=$$(cd $(OUT_DIR)/$(NATIVE_TARGET) && ./demo$(NATIVE_EXE_EXT) "Hello"); \
+		[ -L $(PROJECT_DIR)/demo$(NATIVE_EXE_EXT) ] || { echo "FAIL: missing native launcher link" >&2; exit 1; }; \
+		out=$$(cd $(PROJECT_DIR) && ./demo$(NATIVE_EXE_EXT) "Hello"); \
 		[ "$$out" = "SGVsbG8=" ] || { echo "FAIL: expected SGVsbG8=, got: $$out" >&2; exit 1; }; \
 		out_dir=$$(cd $(OUT_DIR)/$(NATIVE_TARGET) && pwd); \
 		out=$$(cd /tmp && "$$out_dir/demo$(NATIVE_EXE_EXT)" "World"); \
 		[ "$$out" = "V29ybGQ=" ] || { echo "FAIL: expected V29ybGQ=, got: $$out" >&2; exit 1; }; \
 		[ -f "$$out_dir/src/main.lua" ] || { echo "FAIL: missing src/main.lua" >&2; exit 1; }; \
 		[ -d "$$out_dir/src" ] || { echo "FAIL: missing source tree" >&2; exit 1; }; \
+		[ -f "$$out_dir/share/lua/kcapp.lua" ] || { echo "FAIL: missing shared Lua runtime" >&2; exit 1; }; \
 		if find "$$out_dir" -maxdepth 1 -type f \( -name luajit -o -name luajit.exe \) | grep -q .; then \
 			echo "FAIL: standalone LuaJIT executable was packaged" >&2; exit 1; \
-		fi; \
-		if command -v luajit >/dev/null 2>&1; then \
-			out=$$(cd "$$out_dir" && luajit src/main.lua "Hello"); \
-			[ "$$out" = "SGVsbG8=" ] || { echo "FAIL: global LuaJIT failed: $$out" >&2; exit 1; }; \
 		fi; \
 	fi
 	@echo "OK test"
@@ -151,6 +150,7 @@ esac; \
 	platform="$${target##*/}"; \
 	[ -f '$(CONFIG)' ] || { echo "kcapp: missing config: $(CONFIG)" >&2; exit 1; }; \
 	[ -f '$(SRC_DIR)/main.lua' ] || { echo "kcapp: missing source entry point: $(SRC_DIR)/main.lua" >&2; exit 1; }; \
+	[ -f '$(SHARE_LUA_DIR)/kcapp.lua' ] || { echo "kcapp: missing shared Lua runtime: $(SHARE_LUA_DIR)/kcapp.lua" >&2; exit 1; }; \
 	[ -f '$(RUN_C)' ] || { echo "kcapp: missing launcher source: $(RUN_C)" >&2; exit 1; }; \
 	[ -f '$(LUAJIT_INCLUDE_DIR)/lua.h' ] || { echo "kcapp: missing LuaJIT headers: $(LUAJIT_INCLUDE_DIR)" >&2; exit 1; }; \
 	[ -n '$(KC_LIBS)' ] || { echo "kcapp: no kclib entries in $(CONFIG)" >&2; exit 1; }; \
@@ -177,6 +177,8 @@ esac; \
 	rm -f "$$out/luajit" "$$out/luajit.exe" "$$out/main.lua"; \
 	mkdir -p "$$out/src"; \
 	cp -R '$(SRC_DIR)/.' "$$out/src/"; \
+	mkdir -p "$$out/share/lua"; \
+	cp -R '$(SHARE_LUA_DIR)/.' "$$out/share/lua/"; \
 	if [ -f '$(README)' ]; then cp '$(README)' "$$out/README.md"; fi; \
 	case "$$platform" in \
 	linux)   cp "$$ltarget/$$runtime" "$$out/lib/"; ln -sf "$$runtime" "$$out/lib/libluajit-5.1.so.2"; "$$compiler" -std=c11 -I'$(LUAJIT_INCLUDE_DIR)' -I'$(RUN_INCLUDE_DIR)' '$(RUN_C)' -L"$$ltarget" -Wl,-rpath,'$$ORIGIN/lib' -lluajit -o "$$out/$$executable" ;; \
@@ -192,6 +194,11 @@ for dep in $(KC_LIBS); do \
 	cp "$$cdef" "$$out/lib/"; \
 	cp "$$lib" "$$out/lib/"; \
 done; \
+if [ "$$target" = "$(NATIVE_TARGET)" ]; then \
+	link='$(PROJECT_DIR)/'"$$executable"; \
+	if [ -e "$$link" ] && [ ! -L "$$link" ]; then echo "kcapp: native launcher path already exists: $$link" >&2; exit 1; fi; \
+	ln -sfn "bin/$$target/$$executable" "$$link"; \
+fi; \
 echo "OK $$target"
 endef
 
