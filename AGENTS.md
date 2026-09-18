@@ -32,6 +32,9 @@ The Lua source is the product. Projects live directly under `proj/`.
 kcapp/
 ├── AGENTS.md
 ├── README.md
+├── scripts/
+│   ├── build.sh
+│   └── dist.sh
 ├── proj/
 │   └── demo/
 │       ├── Makefile
@@ -41,6 +44,9 @@ kcapp/
 │       └── bin/
 │           └── <arch>/<platform>/
 └── dist/
+    ├── manifest.json
+    └── <project>/
+        └── <project>-<platform>-<arch>.zip
 ```
 
 `bin/` is project-local generated output for runnable target directories.
@@ -49,18 +55,72 @@ kcapp/
 
 Each project carries its own self-contained `Makefile`, and composition runs from inside the project directory with `make`, `make <arch>/<platform>`, or `make all`.
 
+## Build scripts
+
+`scripts/build.sh <project>` enters `proj/<project>/` and runs:
+
+```sh
+make all
+```
+
+The build script delegates build behavior to the project's own `Makefile`. Do not duplicate project build logic in `scripts/build.sh`.
+
+## Distribution
+
+`scripts/dist.sh` packages existing project build outputs. It does not build projects.
+
+Each existing target under:
+
+```text
+proj/<project>/bin/<arch>/<platform>/
+```
+
+is packaged as:
+
+```text
+dist/<project>/<project>-<platform>-<arch>.zip
+```
+
+The contents of `<platform>/` are stored directly at the root of the ZIP archive.
+
+Each package contains:
+
+```text
+SHA256SUM.txt
+```
+
+`SHA256SUM.txt` stores one SHA-256 digest representing the installable build contents. The checksum marker itself is excluded when calculating that digest.
+
+The same build digest is published for the package in:
+
+```text
+dist/manifest.json
+```
+
+This digest is the installed-build identity used by external systems to determine whether an installed project differs from the published build.
+
+Do not derive this published build identity from ZIP metadata or from the ZIP file itself. Repacking identical installable contents must not change the build identity.
+
+`manifest.json` also contains:
+
+* `updated_at`: UTC ISO-8601 generation time.
+* `timestamp`: Unix generation timestamp.
+* `projects`: published projects and their package build digests.
+
+Packaging and distribution metadata generation belong in `scripts/dist.sh`. Do not move project compilation into the distribution step.
+
 ## Authoritative plan
 
 `PLAN.md` is the project-local specification for the implementation. It takes precedence over completion history or prior notes for the current milestone. Implement only the requested milestone; do not get ahead of the task.
 
 ## Composition rules
 
-- Resolve `<arch>/<platform>` from the target.
-- Resolve kclib dependencies as `$(KCLIB_DIST_DIR)/NAME.c/<arch>/<platform>/`.
-- Select `libNAME.cdef` and the platform shared library (`.so`, `.dll`, `.dylib`).
-- Copy LuaJIT for the target from its prebuilt distribution.
-- If a target directory or any required artifact is missing, fail clearly.
-- Preserve the Lua source structure. Do not transform Lua code, generate bindings, or generate wrappers.
+* Resolve `<arch>/<platform>` from the target.
+* Resolve kclib dependencies as `$(KCLIB_DIST_DIR)/NAME.c/<arch>/<platform>/`.
+* Select `libNAME.cdef` and the platform shared library (`.so`, `.dll`, `.dylib`).
+* Copy LuaJIT for the target from its prebuilt distribution.
+* If a target directory or any required artifact is missing, fail clearly.
+* Preserve the Lua source structure. Do not transform Lua code, generate bindings, or generate wrappers.
 
 ## Structure and dependencies
 

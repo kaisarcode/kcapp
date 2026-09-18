@@ -23,9 +23,9 @@ make x86_64/linux
 make all
 ```
 
-- `make` composes the native target (detected from the host).
-- `make <arch>/<platform>` composes one target.
-- `make all` composes every target for which LuaJIT and all declared kclib dependencies exist.
+* `make` composes the native target detected from the host.
+* `make <arch>/<platform>` composes one target.
+* `make all` composes every target for which LuaJIT and all declared kclib dependencies exist.
 
 Output:
 
@@ -50,24 +50,144 @@ produces:
 SGVsbG8=
 ```
 
+## Scripts
+
+Build all available targets for one project:
+
+```sh
+./scripts/build.sh demo
+```
+
+This enters:
+
+```text
+proj/demo/
+```
+
+and runs:
+
+```sh
+make all
+```
+
+Package all available project builds:
+
+```sh
+./scripts/dist.sh
+```
+
+The distribution script does not build projects. It packages build outputs that already exist under each project's `bin/` directory.
+
+## Distribution
+
+For each existing build target:
+
+```text
+proj/<project>/bin/<arch>/<platform>/
+```
+
+`dist.sh` creates:
+
+```text
+dist/<project>/<project>-<platform>-<arch>.zip
+```
+
+For example:
+
+```text
+proj/demo/bin/x86_64/linux/
+```
+
+becomes:
+
+```text
+dist/demo/demo-linux-x86_64.zip
+```
+
+The contents of the platform build directory are stored directly at the root of the ZIP archive.
+
+Each package also contains:
+
+```text
+SHA256SUM.txt
+```
+
+This file stores a SHA-256 digest representing the installable build contents.
+
+For example:
+
+```text
+demo-linux-x86_64.zip
+├── luajit
+├── main.lua
+├── lib/
+│   ├── libb64.cdef
+│   └── libb64.so
+└── SHA256SUM.txt
+```
+
+The same build digest is published in:
+
+```text
+dist/manifest.json
+```
+
+This allows an installed application or an external update system to compare its local `SHA256SUM.txt` with the published manifest and determine whether that build has changed.
+
+The manifest also contains:
+
+* `updated_at`: UTC ISO-8601 generation time.
+* `timestamp`: Unix generation timestamp.
+* the published package checksum for each project build.
+
+Example:
+
+```json
+{
+  "updated_at": "2026-09-18T18:10:00Z",
+  "timestamp": 1789755000,
+  "projects": {
+    "demo": {
+      "packages": {
+        "demo-linux-x86_64.zip": {
+          "sha256": "6c3a5d4e..."
+        }
+      }
+    }
+  }
+}
+```
+
+The `sha256` stored in the manifest is the build identity stored inside the corresponding package's `SHA256SUM.txt`. It is not the checksum of the ZIP file itself.
+
 ## Layout
 
 ```text
 kcapp/
 ├── AGENTS.md
 ├── README.md
+├── scripts/
+│   ├── build.sh
+│   └── dist.sh
 ├── proj/
 │   └── demo/
 │       ├── Makefile
 │       ├── config.json
-│       └── src/
-│           └── main.lua
+│       ├── src/
+│       │   └── main.lua
+│       └── bin/
+│           └── <arch>/<platform>/
 └── dist/
+    ├── manifest.json
+    └── demo/
+        └── demo-<platform>-<arch>.zip
 ```
 
 `proj/` contains application projects. A project contains its Lua source, a minimal `config.json`, and its own self-contained `Makefile`. Dependencies and the LuaJIT runtime are resolved automatically.
 
-`dist/` is reserved for distributable application packages.
+`bin/` contains generated runnable build targets for a project.
+
+`dist/` contains packaged application builds and the distribution manifest.
 
 ## Configuration
 
@@ -96,11 +216,11 @@ make KCLIB_DIST_DIR=/abs/path/kclib/dist x86_64/linux
 
 For dependency `NAME` and target `<arch>/<platform>`, `kcapp` selects `libNAME.cdef` and the platform shared library:
 
-| platform | library |
-| :--- | :--- |
-| linux | `libNAME.so` |
-| windows | `libNAME.dll` |
-| macos | `libNAME.dylib` |
+| platform | library         |
+| :------- | :-------------- |
+| linux    | `libNAME.so`    |
+| windows  | `libNAME.dll`   |
+| macos    | `libNAME.dylib` |
 
 `kcapp` copies LuaJIT from the precompiler distribution. If the target directory or any required artifact is missing, composition fails with a clear error.
 
