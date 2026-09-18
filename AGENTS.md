@@ -37,6 +37,7 @@ kcapp/
 │   └── dist.sh
 ├── proj/
 │   └── demo/
+│       ├── README.md
 │       ├── Makefile
 │       ├── config.json
 │       ├── src/
@@ -109,6 +110,33 @@ Do not derive this published build identity from ZIP metadata or from the ZIP fi
 
 Packaging and distribution metadata generation belong in `scripts/dist.sh`. Do not move project compilation into the distribution step.
 
+## Project READMEs
+
+Every project under `proj/` must include a `README.md`.
+
+Project READMEs are end-user documentation. Unlike kclib documentation, they are written for people who want to use the application, not for developers who want to build or integrate it.
+
+Write project documentation in clear, non-technical language.
+
+A project README should explain, when applicable:
+
+* what the application does;
+* who it is useful for;
+* how to start and use it;
+* the main user-facing features;
+* any files, folders, permissions, or system requirements the user must know about;
+* platform-specific usage differences that affect the user;
+* where the application stores or reads user-visible data;
+* limitations or important behavior a user should know before using it.
+
+Do not document internal implementation details unless they directly affect normal use.
+
+Avoid developer-oriented material such as build instructions, compiler details, internal dependency layout, LuaJIT internals, kclib integration, source architecture, or generated artifact structure in a project README.
+
+Repository-level developer and distribution documentation belongs in the root `README.md`, `AGENTS.md`, project `Makefile`, or other development documentation.
+
+Keep each project README specific to the actual application. Do not use a generic template mechanically when the application needs different user guidance.
+
 ## Authoritative plan
 
 `PLAN.md` is the project-local specification for the implementation. It takes precedence over completion history or prior notes for the current milestone. Implement only the requested milestone; do not get ahead of the task.
@@ -128,4 +156,6 @@ Use existing project mechanisms before introducing new ones. Keep project behavi
 
 ## Tests and documentation
 
-Use the repository's existing validation paths. Update documentation when public or operational behavior changes. Keep the README consistent with the project layout and actual behavior.
+Use the repository's existing validation paths. Update documentation when public or operational behavior changes. Keep the root README consistent with the repository layout and actual behavior.
+
+Keep each project README focused on the end-user experience of that application.
