@@ -168,6 +168,7 @@ generate_project_manifest()
 # @return 0 on success.
 main()
 {
+    rm -rf "$dist_dir"
     package_artifacts "$proj_dir" "$dist_dir"
 
     for project_dir in "$dist_dir"/*/; do
