@@ -8,8 +8,8 @@ PROJECT ?= demo
 
 KCAPP_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
-KCLIB_DIST_DIR ?= $(abspath $(KCAPP_DIR)/../kclib/dist)
-LUAJIT_DIST_DIR ?= $(abspath $(KCAPP_DIR)/../luajit/dist)
+KCLIB_DIST_DIR ?= $(KCAPP_DIR)/../kclib/dist
+LUAJIT_DIST_DIR ?= $(KCAPP_DIR)/../luajit/dist
 
 PROJECT_DIR := $(KCAPP_DIR)/projects/$(PROJECT)
 CONFIG := $(PROJECT_DIR)/config.json
@@ -18,14 +18,68 @@ OUT_DIR := $(PROJECT_DIR)/bin
 
 KC_LIBS := $(if $(wildcard $(CONFIG)),$(shell awk -v key='"kclib"' '{ buf = buf " " $$0 } END { if (match(buf, key "[[:space:]]*:[[:space:]]*\\[")) { s = substr(buf, RSTART + RLENGTH); while (match(s, /"[^"]*"/)) { v = substr(s, RSTART + 1, RLENGTH - 2); print v; s = substr(s, RSTART + RLENGTH) } } }' "$(CONFIG)"),)
 
-.DEFAULT_GOAL := help
+PLATFORM_EXT_linux   := so
+PLATFORM_EXT_windows := dll
+PLATFORM_EXT_macos   := dylib
 
-.PHONY: help
+LUAJIT_TARGETS := $(sort $(foreach p,linux windows macos,$(foreach f,$(wildcard $(LUAJIT_DIST_DIR)/*/$(p)/luajit*),$(patsubst %/,%,$(patsubst $(LUAJIT_DIST_DIR)/%,%,$(dir $f))))))
+
+define target_available
+$(if $(wildcard $(LUAJIT_DIST_DIR)/$(1)/luajit*),$(if $(foreach d,$(KC_LIBS),$(and $(wildcard $(KCLIB_DIST_DIR)/$(d).c/$(1)/lib$(d).cdef),$(wildcard $(KCLIB_DIST_DIR)/$(d).c/$(1)/lib$(d).$(PLATFORM_EXT_$(notdir $(1)))))),$(1)))
+endef
+
+AVAILABLE_TARGETS := $(foreach t,$(LUAJIT_TARGETS),$(if $(call target_available,$(t)),$(t)))
+
+HOST_ARCH     := $(shell uname -m)
+HOST_SYSTEM   := $(shell uname -s)
+
+NATIVE_ARCH := unsupported
+ifneq ($(filter x86_64 amd64,$(HOST_ARCH)),)
+NATIVE_ARCH := x86_64
+endif
+ifneq ($(filter aarch64 arm64,$(HOST_ARCH)),)
+NATIVE_ARCH := aarch64
+endif
+ifneq ($(filter i386 i686,$(HOST_ARCH)),)
+NATIVE_ARCH := i686
+endif
+
+NATIVE_PLATFORM := unsupported
+ifeq ($(HOST_SYSTEM),Linux)
+NATIVE_PLATFORM := linux
+endif
+ifneq ($(filter MINGW% MSYS% CYGWIN%,$(HOST_SYSTEM)),)
+NATIVE_PLATFORM := windows
+endif
+ifeq ($(HOST_SYSTEM),Darwin)
+NATIVE_PLATFORM := macos
+endif
+
+NATIVE_TARGET := $(NATIVE_ARCH)/$(NATIVE_PLATFORM)
+
+ifeq ($(filter $(NATIVE_TARGET),$(AVAILABLE_TARGETS)),)
+.DEFAULT_GOAL := help
+else
+.DEFAULT_GOAL := $(NATIVE_TARGET)
+endif
+
+.PHONY: all help
+all: $(AVAILABLE_TARGETS)
+	@if [ -z '$(AVAILABLE_TARGETS)' ]; then \
+		echo "kcapp: no targets available for project '$(PROJECT)'" >&2; \
+		echo "kcapp: LuaJIT or a declared kclib is missing for every target" >&2; \
+		exit 1; \
+	fi
+	@echo "kcapp: all targets composed for project '$(PROJECT)'"
+
 help:
 	@echo 'Usage:'
+	@echo '  make                 # compose the native target of PROJECT'
+	@echo '  make <arch>/<platform>'
+	@echo '  make all             # compose every available desktop target'
 	@echo '  make PROJECT=NAME <arch>/<platform>'
 	@echo 'Example:'
-	@echo '  make PROJECT=demo x86_64/linux'
+	@echo '  make x86_64/linux'
 	@echo 'Output:'
 	@echo '  projects/$(PROJECT)/bin/<arch>/<platform>/'
 

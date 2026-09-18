@@ -1,0 +1,2 @@
+PROJECT := demo
+include ../../Makefile

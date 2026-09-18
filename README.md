@@ -6,15 +6,32 @@ It does not compile C, does not rebuild kclib, does not rebuild LuaJIT, and does
 
 ## Usage
 
+From a project directory:
+
 ```sh
-make PROJECT=NAME <arch>/<platform>
+make                         # native target
+make <arch>/<platform>       # specific target
+make all                     # every available desktop target
 ```
 
 Example:
 
 ```sh
-make PROJECT=demo x86_64/linux
+cd projects/demo
+make
+make x86_64/linux
+make all
 ```
+
+From the repository root, select the project explicitly (default `demo`):
+
+```sh
+make PROJECT=NAME <arch>/<platform>
+```
+
+- `make` composes the native target (detected from the host).
+- `make <arch>/<platform>` composes one target.
+- `make all` composes every target for which LuaJIT and all declared kclib dependencies exist.
 
 Output:
 
