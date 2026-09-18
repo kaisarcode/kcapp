@@ -61,6 +61,12 @@ Each generated application also includes the shared Lua runtime under `share/lua
 
 ## Scripts
 
+Create a new project:
+
+```sh
+./scripts/init.sh demo
+```
+
 Build all available targets for one project:
 
 ```sh
