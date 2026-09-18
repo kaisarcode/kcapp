@@ -17,7 +17,7 @@ make test wine               # run the test under Wine
 Example:
 
 ```sh
-cd projects/demo
+cd proj/demo
 make
 make x86_64/linux
 make all
@@ -30,7 +30,7 @@ make all
 Output:
 
 ```text
-projects/demo/bin/x86_64/linux/
+proj/demo/bin/x86_64/linux/
 ├── luajit
 ├── main.lua
 └── lib/
@@ -56,15 +56,18 @@ SGVsbG8=
 kcapp/
 ├── AGENTS.md
 ├── README.md
-└── projects/
-    └── demo/
-        ├── Makefile
-        ├── config.json
-        └── src/
-            └── main.lua
+├── proj/
+│   └── demo/
+│       ├── Makefile
+│       ├── config.json
+│       └── src/
+│           └── main.lua
+└── dist/
 ```
 
-A project contains its own Lua source, a minimal `config.json`, and its own self-contained `Makefile`. Dependencies and the LuaJIT runtime are resolved automatically.
+`proj/` contains application projects. A project contains its Lua source, a minimal `config.json`, and its own self-contained `Makefile`. Dependencies and the LuaJIT runtime are resolved automatically.
+
+`dist/` is reserved for distributable application packages.
 
 ## Configuration
 
@@ -99,7 +102,7 @@ For dependency `NAME` and target `<arch>/<platform>`, `kcapp` selects `libNAME.c
 | windows | `libNAME.dll` |
 | macos | `libNAME.dylib` |
 
-`kcapp` copies LuaJIT from the precompiler distribution; it never rebuilds it. If the target directory or any required artifact is missing, `kcapp` fails clearly and does not attempt to fix or rebuild the dependency.
+`kcapp` copies LuaJIT from the precompiler distribution. If the target directory or any required artifact is missing, composition fails with a clear error.
 
 ## Targets
 
@@ -113,4 +116,4 @@ aarch64/linux
 aarch64/macos
 ```
 
-`kcapp` is desktop-only. Android, iOS, iossim, and wasm are not supported.
+`kcapp` targets desktop platforms: Linux, Windows, and macOS.
