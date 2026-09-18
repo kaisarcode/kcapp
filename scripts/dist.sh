@@ -93,6 +93,7 @@ package_artifacts()
 
                 build_sha256=$(compute_build_sha256 "$build_dir")
                 printf '%s\n' "$build_sha256" > "$build_dir/SHA256SUM.txt"
+                rm -f "$package"
 
                 (
                     cd "$build_dir"

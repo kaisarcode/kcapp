@@ -31,23 +31,33 @@ Output:
 
 ```text
 proj/demo/bin/x86_64/linux/
-├── luajit
-├── main.lua
+├── demo
+├── src/
+│   └── main.lua
 └── lib/
     ├── libb64.cdef
-    └── libb64.so
+    ├── libb64.so
+    └── libluajit.so
 ```
 
 From the output directory:
 
 ```sh
-./luajit main.lua "Hello"
+./demo "Hello"
 ```
 
 produces:
 
 ```text
 SGVsbG8=
+```
+
+Every composed application exposes its own native executable (`demo` on Linux and macOS, `demo.exe` on Windows). The executable runs `src/main.lua` relative to its own application directory, so it can be started from any current working directory. The standalone LuaJIT executable is not distributed as an end-user entry point.
+
+With a globally installed LuaJIT, developers can still run the composed source directly:
+
+```sh
+luajit src/main.lua "Hello"
 ```
 
 ## Scripts
@@ -118,11 +128,13 @@ For example:
 
 ```text
 demo-linux-x86_64.zip
-├── luajit
-├── main.lua
+├── demo
+├── src/
+│   └── main.lua
 ├── lib/
 │   ├── libb64.cdef
-│   └── libb64.so
+│   ├── libb64.so
+│   └── libluajit.so
 └── SHA256SUM.txt
 ```
 
@@ -185,6 +197,8 @@ kcapp/
 
 `proj/` contains application projects. A project contains its Lua source, a minimal `config.json`, and its own self-contained `Makefile`. Dependencies and the LuaJIT runtime are resolved automatically.
 
+The complete project `src/` directory is copied to each application build. This keeps Lua modules, assets, configuration, and nested resources in their original structure.
+
 `bin/` contains generated runnable build targets for a project.
 
 `dist/` contains packaged application builds and the distribution manifest.
@@ -222,7 +236,7 @@ For dependency `NAME` and target `<arch>/<platform>`, `kcapp` selects `libNAME.c
 | windows  | `libNAME.dll`   |
 | macos    | `libNAME.dylib` |
 
-`kcapp` copies LuaJIT from the precompiler distribution. If the target directory or any required artifact is missing, composition fails with a clear error.
+`kcapp` links the project-named native launcher with the prebuilt LuaJIT shared library and copies its required runtime library. It does not distribute `luajit` or `luajit.exe`. If the target directory or any required artifact is missing, composition fails with a clear error.
 
 ## Targets
 

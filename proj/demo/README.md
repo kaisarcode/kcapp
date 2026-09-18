@@ -25,13 +25,13 @@ Open a terminal in the application folder and run the application with the text 
 On Linux or macOS:
 
 ```sh
-./luajit main.lua "Hello"
+./demo "Hello"
 ```
 
 On Windows:
 
 ```sh
-luajit.exe main.lua "Hello"
+demo.exe "Hello"
 ```
 
 The encoded value is printed directly in the terminal:
@@ -45,7 +45,7 @@ You can replace `Hello` with any text you want to encode.
 For example:
 
 ```sh
-./luajit main.lua "Hello world"
+./demo "Hello world"
 ```
 
 ## If no text is provided

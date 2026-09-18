@@ -8,6 +8,8 @@ Read the workspace-level `AGENTS.md` first. These rules add kcapp-specific conve
 
 `kcapp` is a generator/composer for LuaJIT-based desktop applications. It composes already-built artifacts from kclib and LuaJIT together with the application's Lua source.
 
+Each composed application exposes its own project-named native executable. The launcher always changes to its application root and runs `src/main.lua` from there.
+
 ## Main principle
 
 Do not compile again what already exists. `kcapp` composes existing artifacts:
@@ -18,7 +20,7 @@ luajit-precompiler/... -> copy/select
 project Lua source     -> copy
 ```
 
-Dependency artifacts are selected and copied into runnable application directories. No network access belongs in the composition process.
+Dependency artifacts are selected and copied into runnable application directories. LuaJIT is linked as a prebuilt shared library; its standalone executable is not an end-user runtime component. No network access belongs in the composition process.
 
 ## Scope
 
@@ -35,6 +37,10 @@ kcapp/
 ├── scripts/
 │   ├── build.sh
 │   └── dist.sh
+├── share/
+│   └── run/
+│       ├── run.c
+│       └── run.h
 ├── proj/
 │   └── demo/
 │       ├── README.md
@@ -146,9 +152,9 @@ Keep each project README specific to the actual application. Do not use a generi
 * Resolve `<arch>/<platform>` from the target.
 * Resolve kclib dependencies as `$(KCLIB_DIST_DIR)/NAME.c/<arch>/<platform>/`.
 * Select `libNAME.cdef` and the platform shared library (`.so`, `.dll`, `.dylib`).
-* Copy LuaJIT for the target from its prebuilt distribution.
+* Compile the shared launcher against the target's prebuilt LuaJIT shared library and copy only the required LuaJIT runtime library.
 * If a target directory or any required artifact is missing, fail clearly.
-* Preserve the Lua source structure. Do not transform Lua code, generate bindings, or generate wrappers.
+* Preserve the complete `src/` tree, including nested modules, assets, and configuration. Do not transform Lua code, generate bindings, or generate wrappers.
 
 ## Structure and dependencies
 
