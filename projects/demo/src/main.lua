@@ -3,7 +3,11 @@ local ffi = require("ffi");
 local function load(name)
     local def = io.open("./lib/lib"..name..".cdef", "r");
     ffi.cdef(def:read("*a")); def:close();
-    return ffi.load("./lib/lib"..name..".so");
+    local ext = ".so";
+    if (ffi.os == "Windows") then ext = ".dll";
+    elseif (ffi.os == "OSX") then ext = ".dylib";
+    end
+    return ffi.load("./lib/lib"..name..ext);
 end
 
 local b64 = {};
