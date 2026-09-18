@@ -11,6 +11,7 @@ WINE ?= wine
 
 PROJECT_DIR := $(CURDIR)
 CONFIG := $(PROJECT_DIR)/config.json
+README := $(PROJECT_DIR)/README.md
 SRC_DIR := $(PROJECT_DIR)/src
 OUT_DIR := $(PROJECT_DIR)/bin
 
@@ -141,6 +142,7 @@ ltarget='$(LUAJIT_DIST_DIR)/'"$$arch"'/'"$$platform"; \
 out='$(OUT_DIR)/'"$$target"; \
 mkdir -p "$$out/lib"; \
 cp -R '$(SRC_DIR)/.' "$$out/"; \
+if [ -f '$(README)' ]; then cp '$(README)' "$$out/README.md"; fi; \
 cp "$$ltarget/$$lexec" "$$out/$$lexec"; \
 chmod +x "$$out/$$lexec"; \
 case "$$platform" in \
