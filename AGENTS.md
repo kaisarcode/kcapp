@@ -8,7 +8,7 @@ Read the workspace-level `AGENTS.md` first. These rules add kcapp-specific conve
 
 `kcapp` is a generator/composer for LuaJIT-based desktop applications. It composes already-built artifacts from kclib and LuaJIT together with the application's Lua source.
 
-Each composed application exposes its own project-named native executable. The launcher always changes to its application root and runs `src/main.lua` from there.
+Each composed application exposes its own project-named native executable. The launcher resolves its real executable location, changes to its application root, and runs `src/main.lua` from there. Invoking it through a symlink does not change that root.
 
 `share/lua/kcapp.lua` is the shared Lua runtime module for all applications. Project Lua code must use `require("kcapp")` instead of duplicating shared kclib-loading helpers.
 

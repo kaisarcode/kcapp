@@ -7,6 +7,7 @@
  * License: https://www.gnu.org/licenses/gpl-3.0.html
  */
 
+#define _XOPEN_SOURCE 700
 #define _POSIX_C_SOURCE 200809L
 
 #include "run.h"
@@ -27,6 +28,7 @@
 #include <unistd.h>
 #else
 #include <limits.h>
+#include <stdlib.h>
 #include <unistd.h>
 #endif
 
@@ -60,6 +62,10 @@ static int kc_run_set_root(void) {
         return 1;
     }
     path[length] = '\0';
+    if (realpath(path, path) == NULL) {
+        fprintf(stderr, "kcapp: unable to resolve executable path\n");
+        return 1;
+    }
     separator = strrchr(path, '/');
 #endif
 
