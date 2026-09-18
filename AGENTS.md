@@ -6,7 +6,7 @@ This repository is the public development repository for `kcapp`.
 
 Read the workspace-level `AGENTS.md` first. These rules add kcapp-specific conventions.
 
-`kcapp` is a generator/composer for LuaJIT-based desktop applications. It composes already-built artifacts. It does not compile C, does not rebuild kclib, does not rebuild LuaJIT, and does not require `wvw`.
+`kcapp` is a generator/composer for LuaJIT-based desktop applications. It composes already-built artifacts from kclib and LuaJIT together with the application's Lua source.
 
 ## Main principle
 
@@ -18,31 +18,36 @@ luajit-precompiler/... -> copy/select
 project Lua source     -> copy
 ```
 
-No compilation is required. No dependency, framework, service, telemetry, remote API, or network access belongs in the build.
+Dependency artifacts are selected and copied into runnable application directories. No network access belongs in the composition process.
 
 ## Scope
 
-`kcapp` is desktop-only. Do not support Android, iOS, iossim, or wasm. Do not add mobile logic.
+`kcapp` targets desktop applications: Linux, Windows, and macOS.
 
 ## Repository layout
 
-The Lua source is the product. Do not use a `repo/` / `dist/` split.
+The Lua source is the product. Projects live directly under `proj/`.
 
 ```text
 kcapp/
 ├── AGENTS.md
 ├── README.md
-└── projects/
-    └── demo/
-        ├── Makefile
-        ├── config.json
-        ├── src/
-        │   └── main.lua
-        └── bin/
-            └── <arch>/<platform>/
+├── proj/
+│   └── demo/
+│       ├── Makefile
+│       ├── config.json
+│       ├── src/
+│       │   └── main.lua
+│       └── bin/
+│           └── <arch>/<platform>/
+└── dist/
 ```
 
-`bin/` is generated, ephemeral, and must not be tracked. Do not create `.build/`, `dist/`, or `repo/`. There is no global Makefile; each project carries its own self-contained `Makefile`, and builds run from inside the project directory with `make`, `make <arch>/<platform>`, or `make all`.
+`bin/` is project-local generated output for runnable target directories.
+
+`dist/` contains distributable application packages.
+
+Each project carries its own self-contained `Makefile`, and composition runs from inside the project directory with `make`, `make <arch>/<platform>`, or `make all`.
 
 ## Authoritative plan
 
@@ -53,13 +58,13 @@ kcapp/
 - Resolve `<arch>/<platform>` from the target.
 - Resolve kclib dependencies as `$(KCLIB_DIST_DIR)/NAME.c/<arch>/<platform>/`.
 - Select `libNAME.cdef` and the platform shared library (`.so`, `.dll`, `.dylib`).
-- Copy LuaJIT for the target without rebuilding it.
-- If a target directory or any required artifact is missing, fail clearly. Do not attempt to fix, download, or rebuild the dependency.
+- Copy LuaJIT for the target from its prebuilt distribution.
+- If a target directory or any required artifact is missing, fail clearly.
 - Preserve the Lua source structure. Do not transform Lua code, generate bindings, or generate wrappers.
 
 ## Structure and dependencies
 
-Use existing project mechanisms before introducing new ones. Do not add shared runtimes, registries, daemons, or service layers. Small project-local duplication is acceptable when it keeps behavior easier to inspect.
+Use existing project mechanisms before introducing new ones. Keep project behavior local and easy to inspect.
 
 ## Tests and documentation
 
