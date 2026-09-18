@@ -102,6 +102,10 @@ mkdir -p "$$out/lib"; \
 cp -R '$(SRC_DIR)/.' "$$out/"; \
 cp "$$ltarget/$$lexec" "$$out/$$lexec"; \
 chmod +x "$$out/$$lexec"; \
+case "$$platform" in \
+	windows) [ -f "$$ltarget/libluajit.dll" ] || { echo "kcapp: missing runtime for $$target: $$ltarget/libluajit.dll" >&2; exit 1; }; cp "$$ltarget/libluajit.dll" "$$out/"; ;; \
+	macos)   [ -f "$$ltarget/libluajit.dylib" ] || { echo "kcapp: missing runtime for $$target: $$ltarget/libluajit.dylib" >&2; exit 1; }; cp "$$ltarget/libluajit.dylib" "$$out/"; ;; \
+esac; \
 for dep in $(KC_LIBS); do \
 	ddir='$(KCLIB_DIST_DIR)/'"$$dep"'.c/'"$$arch"'/'"$$platform"; \
 	cdef="$$ddir/lib$$dep.cdef"; \
