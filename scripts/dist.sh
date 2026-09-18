@@ -1,7 +1,13 @@
 #!/bin/sh
+# kcapp distribution tool
+# Summary: Packages built kcapp projects into distributable archives.
+# Author:  KaisarCode
+# Website: https://kaisarcode.com
+# License: GNU General Public License v3.0
+
 set -eu
 
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 root_dir=$(dirname "$script_dir")
 proj_dir="$root_dir/proj"
 dist_dir="$root_dir/dist"
