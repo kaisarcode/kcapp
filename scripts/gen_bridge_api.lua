@@ -120,8 +120,6 @@ local function generate_bridge_api(libs, kclib_dist_dir, arch, platform, output_
         local cdef_path = kclib_dist_dir .. "/" .. lib .. ".c/" .. arch .. "/" .. platform .. "/lib" .. lib .. ".cdef"
         local cdef_content = read_file(cdef_path)
         if not cdef_content then
-            -- Library not available for this target, skip it
-            io.stderr:write("kcapp: skipping " .. lib .. " for " .. arch .. "/" .. platform .. " (no cdef)\n")
         else
             local functions = parse_cdef(cdef_content)
             api.libraries[lib] = {

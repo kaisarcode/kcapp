@@ -31,8 +31,22 @@ LUAJIT_RUNTIME_windows := libluajit.dll
 LUAJIT_RUNTIME_macos := libluajit.dylib
 LUAJIT_TARGETS := $(sort $(foreach p,linux windows macos,$(foreach f,$(wildcard $(LUAJIT_DIST_DIR)/*/$(p)/$(LUAJIT_RUNTIME_$(p))),$(patsubst %/,%,$(patsubst $(LUAJIT_DIST_DIR)/%,%,$(dir $f))))))
 
+define lib_available
+$(if $(and $(wildcard $(KCLIB_DIST_DIR)/$(1).c/$(2)/lib$(1).cdef),$(wildcard $(KCLIB_DIST_DIR)/$(1).c/$(2)/lib$(1).$(PLATFORM_EXT_$(notdir $(2))))),1)
+endef
+
+KC_LIB_COUNT := $(words $(KC_LIBS))
+
+define available_lib_count
+$(words $(filter 1,$(foreach d,$(KC_LIBS),$(call lib_available,$(d),$(1)))))
+endef
+
+define all_libs_available
+$(if $(filter $(KC_LIB_COUNT),$(call available_lib_count,$(1))),$(1))
+endef
+
 define target_available
-$(if $(wildcard $(LUAJIT_DIST_DIR)/$(1)/$(LUAJIT_RUNTIME_$(notdir $(1)))),$(1))
+$(if $(wildcard $(LUAJIT_DIST_DIR)/$(1)/$(LUAJIT_RUNTIME_$(notdir $(1)))),$(call all_libs_available,$(1)))
 endef
 
 AVAILABLE_TARGETS := $(foreach t,$(LUAJIT_TARGETS),$(if $(call target_available,$(t)),$(t)))
@@ -139,7 +153,6 @@ for dep in $(KC_LIBS); do \
 	ddir='$(KCLIB_DIST_DIR)/'"$$dep"'.c/'"$$arch"'/'"$$platform"; \
 	cdef="$$ddir/lib$$dep.cdef"; lib="$$ddir/lib$$dep$$lext"; \
 	if [ ! -f "$$cdef" ] || [ ! -f "$$lib" ]; then \
-		echo "kcapp: skipping $$dep for $$target (not available)"; \
 		continue; \
 	fi; \
 	cp "$$cdef" "$$lib" "$$out/lib/"; \
