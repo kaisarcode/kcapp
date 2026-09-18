@@ -2,8 +2,6 @@
 
 `kcapp` composes portable, runnable directories for LuaJIT-based desktop applications.
 
-It does not compile C, does not rebuild kclib, does not rebuild LuaJIT, and does not require `wvw`. It collects already-built artifacts and the project's Lua source into a runnable directory for a given target.
-
 ## Usage
 
 From the project directory:
