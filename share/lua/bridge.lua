@@ -11,31 +11,182 @@ if arg[1] == "--materialize" then
         file:close()
     end
 
-    local function parse_cdef(content)
+    local function json_decode(str)
+        local pos = 1
+        local len = #str
+
+        local skip_ws, parse_value, parse_literal, parse_number, parse_string, parse_array, parse_object, utf8_char
+
+        function utf8_char(codepoint)
+            if codepoint <= 0x7f then return string.char(codepoint) end
+            if codepoint <= 0x7ff then return string.char(0xc0 + math.floor(codepoint / 0x40), 0x80 + codepoint % 0x40) end
+            return string.char(0xe0 + math.floor(codepoint / 0x1000), 0x80 + math.floor(codepoint / 0x40) % 0x40, 0x80 + codepoint % 0x40)
+        end
+
+        function skip_ws()
+            while pos <= len and str:sub(pos, pos):match("%s") do
+                pos = pos + 1
+            end
+        end
+
+        function parse_literal(lit, val)
+            if str:sub(pos, pos + #lit - 1) == lit then
+                pos = pos + #lit
+                return val
+            end
+            error("Invalid literal at position " .. pos)
+        end
+
+        function parse_number()
+            local start = pos
+            if str:sub(pos, pos) == "-" then pos = pos + 1 end
+            while pos <= len and str:sub(pos, pos):match("%d") do pos = pos + 1 end
+            if str:sub(pos, pos) == "." then
+                pos = pos + 1
+                while pos <= len and str:sub(pos, pos):match("%d") do pos = pos + 1 end
+            end
+            if str:sub(pos, pos):match("[eE]") then
+                pos = pos + 1
+                if str:sub(pos, pos):match("[+-]") then pos = pos + 1 end
+                while pos <= len and str:sub(pos, pos):match("%d") do pos = pos + 1 end
+            end
+            return tonumber(str:sub(start, pos - 1))
+        end
+
+        function parse_string()
+            pos = pos + 1
+            local result = {}
+            while pos <= len do
+                local c = str:sub(pos, pos)
+                if c == '"' then
+                    pos = pos + 1
+                    return table.concat(result)
+                elseif c == "\\" then
+                    pos = pos + 1
+                    if pos > len then error("Unterminated escape") end
+                    local esc = str:sub(pos, pos)
+                    if esc == "u" then
+                        pos = pos + 1
+                        local hex = str:sub(pos, pos + 3)
+                        pos = pos + 4
+                        table.insert(result, utf8_char(tonumber(hex, 16)))
+                    else
+                        local escapes = {['"'] = '"', ['\\'] = '\\', ['/'] = '/', ['b'] = '\b', ['f'] = '\f', ['n'] = '\n', ['r'] = '\r', ['t'] = '\t'}
+                        table.insert(result, escapes[esc] or esc)
+                        pos = pos + 1
+                    end
+                else
+                    table.insert(result, c)
+                    pos = pos + 1
+                end
+            end
+            error("Unterminated string")
+        end
+
+        function parse_array()
+            pos = pos + 1
+            local result = {}
+            skip_ws()
+            if str:sub(pos, pos) == "]" then
+                pos = pos + 1
+                return result
+            end
+            while true do
+                table.insert(result, parse_value())
+                skip_ws()
+                if str:sub(pos, pos) == "]" then
+                    pos = pos + 1
+                    return result
+                end
+                if str:sub(pos, pos) ~= "," then error("Expected ',' or ']' at position " .. pos) end
+                pos = pos + 1
+            end
+        end
+
+        function parse_object()
+            pos = pos + 1
+            local result = {}
+            skip_ws()
+            if str:sub(pos, pos) == "}" then
+                pos = pos + 1
+                return result
+            end
+            while true do
+                skip_ws()
+                local key = parse_string()
+                skip_ws()
+                if str:sub(pos, pos) ~= ":" then error("Expected ':' at position " .. pos) end
+                pos = pos + 1
+                result[key] = parse_value()
+                skip_ws()
+                if str:sub(pos, pos) == "}" then
+                    pos = pos + 1
+                    return result
+                end
+                if str:sub(pos, pos) ~= "," then error("Expected ',' or '}' at position " .. pos) end
+                pos = pos + 1
+            end
+        end
+
+        function parse_value()
+            skip_ws()
+            if pos > len then return nil end
+            local c = str:sub(pos, pos)
+            if c == "{" then return parse_object() end
+            if c == "[" then return parse_array() end
+            if c == '"' then return parse_string() end
+            if c == "t" then return parse_literal("true", true) end
+            if c == "f" then return parse_literal("false", false) end
+            if c == "n" then return parse_literal("null", nil) end
+            return parse_number()
+        end
+
+        local result = parse_value()
+        skip_ws()
+        if pos <= len then error("Trailing garbage at position " .. pos) end
+        return result
+    end
+
+    local function extract_functions_from_ast(ast, header_dir)
         local functions = {}
-        for line in content:gmatch("[^\r\n]+") do
-            line = line:match("^%s*(.-)%s*$")
-            if line ~= "" and not line:match("^//") and not line:match("^#") and not line:match("^typedef") and not line:match("^enum") and not line:match("^{") and not line:match("^}") then
-                -- Match function declarations: return_type name(params);
-                -- Find the kc_ name that is followed by (
-                local name_start, name_end = line:find("kc_[%w_]+[%s%*]*%s*%(")
-                if name_start then
-                    local name = line:sub(name_start, name_end - 1)
-                    local ret_type = line:sub(1, name_start - 1):match("^%s*(.-)%s*$")
-                    local params_str = line:match("%((.*)%)")
+        local function walk(node)
+            if type(node) ~= "table" then return end
+            if node.kind == "FunctionDecl" and node.name and node.name:match("^kc_") then
+                local loc = node.loc
+                local file = loc and loc.file
+                local included_from = loc and loc.includedFrom
+                local accept = false
+                if not file and not included_from then
+                    accept = true
+                elseif file and file:sub(1, #header_dir) == header_dir then
+                    accept = true
+                end
+                if accept then
+                    local ret_type = ""
+                    if node.type and node.type.qualType then
+                        ret_type = node.type.qualType:match("^(.-)%s*%(") or node.type.qualType
+                    end
                     local params = {}
-                    if params_str and params_str ~= "void" and params_str ~= "" then
-                        for param in params_str:gmatch("[^,]+") do
-                            param = param:match("^%s*(.-)%s*$")
-                            if param ~= "" then
-                                table.insert(params, "{ type = " .. string.format("%q", param) .. " }")
+                    if node.inner then
+                        for _, inner in ipairs(node.inner) do
+                            if inner.kind == "ParmVarDecl" then
+                                local param_type = inner.type and (inner.type.desugaredQualType or inner.type.qualType) or ""
+                                if param_type ~= "" then
+                                    table.insert(params, "{ type = " .. string.format("%q", param_type) .. " }")
+                                end
                             end
                         end
                     end
-                    table.insert(functions, string.format("        { name = %q, ret_type = %q, params = {%s} }", name, ret_type, table.concat(params, ", ")))
+                    table.insert(functions, string.format("        { name = %q, ret_type = %q, params = {%s} }", node.name, ret_type, table.concat(params, ", ")))
+                end
+            end
+            for _, v in pairs(node) do
+                if type(v) == "table" then
+                    walk(v)
                 end
             end
         end
+        walk(ast)
         return functions
     end
 
@@ -46,16 +197,17 @@ if arg[1] == "--materialize" then
     local metadata = {}
     for _, library in ipairs(libraries) do
         local directory = dist .. "/" .. library .. ".c/" .. arch .. "/" .. platform
-        local cdef_path = directory .. "/lib" .. library .. ".cdef"
         local header = directory .. "/lib" .. library .. ".h"
         local input = io.open(header, "rb")
         if not input then error("kcapp bridge: missing public header for " .. library .. ": " .. header) end
         input:close()
-        local cdef_file = io.open(cdef_path, "rb")
-        if not cdef_file then error("kcapp bridge: missing cdef for " .. library .. ": " .. cdef_path) end
-        local cdef_content = cdef_file:read("*a")
-        cdef_file:close()
-        local functions = parse_cdef(cdef_content)
+        local command = string.format("clang -fsyntax-only -I %q -Xclang -ast-dump=json -x c %q 2>/dev/null", directory, header)
+        local process = assert(io.popen(command, "r"))
+        local ast_json = process:read("*a")
+        assert(process:close())
+        if ast_json == "" then error("kcapp bridge: clang produced no AST for " .. library) end
+        local ast = json_decode(ast_json)
+        local functions = extract_functions_from_ast(ast, directory)
         if #functions == 0 then error("kcapp bridge: no public API discovered for " .. library) end
         table.sort(functions)
         metadata[#metadata + 1] = "    [" .. string.format("%q", library) .. "] = { functions = {\n" .. table.concat(functions, ",\n") .. "\n    } },"
