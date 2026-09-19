@@ -10,8 +10,6 @@ From the project directory:
 make                         # native target
 make <arch>/<platform>       # specific target
 make all                     # every available desktop target
-make test                    # run the native test
-make test wine               # run the test under Wine
 ```
 
 Example:
@@ -151,16 +149,16 @@ demo-linux-x86_64.zip
 The same build digest is published in:
 
 ```text
-dist/manifest.json
+dist/<project>/manifest.json
 ```
 
 This allows an installed application or an external update system to compare its local `SHA256SUM.txt` with the published manifest and determine whether that build has changed.
 
-The manifest also contains:
+Each project manifest also contains:
 
 * `updated_at`: UTC ISO-8601 generation time.
 * `timestamp`: Unix generation timestamp.
-* the published package checksum for each project build.
+* `packages`: published packages for that project and their build digests.
 
 Example:
 
@@ -168,13 +166,9 @@ Example:
 {
   "updated_at": "2026-09-18T18:10:00Z",
   "timestamp": 1789755000,
-  "projects": {
-    "demo": {
-      "packages": {
-        "demo-linux-x86_64.zip": {
-          "sha256": "6c3a5d4e..."
-        }
-      }
+  "packages": {
+    "demo-linux-x86_64.zip": {
+      "sha256": "6c3a5d4e..."
     }
   }
 }
@@ -210,8 +204,8 @@ kcapp/
 │       └── bin/
 │           └── <arch>/<platform>/
 └── dist/
-    ├── manifest.json
     └── demo/
+        ├── manifest.json
         └── demo-<platform>-<arch>.zip
 ```
 
@@ -223,7 +217,7 @@ The complete project `src/` directory is copied to each application build. This 
 
 `bin/` contains generated runnable build targets for a project.
 
-`dist/` contains packaged application builds and the distribution manifest.
+`dist/` contains packaged application builds and one distribution manifest per project.
 
 ## Configuration
 

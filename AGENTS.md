@@ -60,8 +60,8 @@ kcapp/
 │       └── bin/
 │           └── <arch>/<platform>/
 └── dist/
-    ├── manifest.json
     └── <project>/
+        ├── manifest.json
         └── <project>-<platform>-<arch>.zip
 ```
 
@@ -69,7 +69,7 @@ kcapp/
 
 Generated applications place the shared Lua runtime modules in `src/`. The launcher prepends `src` module paths to Lua's `package.path`, while retaining the existing path entries.
 
-`dist/` contains distributable application packages.
+`dist/` contains distributable application packages and one manifest per project.
 
 Each project carries its own self-contained `Makefile`, and composition runs from inside the project directory with `make`, `make <arch>/<platform>`, or `make all`.
 
@@ -237,7 +237,7 @@ kcapp.bridge(settings_window, {
 ```
 
 Results in:
-```
+```text
 main_window:
   NativeBridge.b64.*
   NativeBridge.redp2p.*
@@ -329,7 +329,7 @@ SHA256SUM.txt
 The same build digest is published for the package in:
 
 ```text
-dist/manifest.json
+dist/<project>/manifest.json
 ```
 
 This digest is the installed-build identity used by external systems to determine whether an installed project differs from the published build.
@@ -338,11 +338,11 @@ Shared Lua runtime files participate in this identity because they are included 
 
 Do not derive this published build identity from ZIP metadata or from the ZIP file itself. Repacking identical installable contents must not change the build identity.
 
-`manifest.json` also contains:
+Each project `manifest.json` also contains:
 
 * `updated_at`: UTC ISO-8601 generation time.
 * `timestamp`: Unix generation timestamp.
-* `projects`: published projects and their package build digests.
+* `packages`: published packages for that project and their build digests.
 
 Packaging and distribution metadata generation belong in `scripts/dist.sh`. Do not move project compilation into the distribution step.
 
