@@ -46,4 +46,3 @@ kcapp.bridge(window, {"redp2p"})
 wvw.kc_wvw_loop(ctx_ptr[0])
 
 wvw.kc_wvw_close(ctx_ptr[0])
-wvw.kc_wvw_options_free(opts)
