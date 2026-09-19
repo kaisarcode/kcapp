@@ -12,9 +12,7 @@ Each composed application exposes its own project-named native executable. The l
 
 `share/lua/kcapp.lua` is the shared Lua runtime module for all applications. Project Lua code must use `require("kcapp")` instead of duplicating shared kclib-loading helpers.
 
-`share/lua/bridge.lua` is the internal bridge implementation used by `kcapp.lua`. It is not a public API.
-
-`share/lua/bridge_api.lua` is generated at build time from the public headers of kclibs declared in `config.json`. It contains structured metadata for the bridge to enumerate exposed functions, validate calls, and dispatch via FFI.
+`share/lua/bridge.lua` is the common bridge source/template/infrastructure. It is not the final application bridge and is not copied verbatim. During the project build, it is combined with project-specific kclib API metadata to materialize the generated `bin/<arch>/<platform>/share/lua/bridge.lua`.
 
 ## Main principle
 
@@ -129,8 +127,7 @@ bin/<arch>/<platform>/
 ├── share/
 │   └── lua/
 │       ├── kcapp.lua
-│       ├── bridge.lua
-│       └── bridge_api.lua
+│       └── bridge.lua
 └── lib/
     └── ...
 ```
@@ -192,14 +189,16 @@ A kclib being present in `config.json` means it is available to the Lua backend.
 
 ### Build-time API generation
 
-Bridge metadata is generated automatically during the project build from the public headers of the kclibs declared in `config.json`. No handwritten JS bindings or per-function metadata are required.
+Bridge metadata is generated automatically during the project build from the public headers of the kclibs declared in `config.json`. No handwritten JS bindings or per-function metadata are required. No separate generator script is used; generation is an internal step of the project `make`.
 
-The generated `share/lua/bridge_api.lua` contains only the kclibs available to that application and enough structured information for `bridge.lua` to:
-* enumerate exposed function names;
-* validate calls;
-* convert JSON arguments to FFI-compatible values;
-* invoke the corresponding C function;
-* serialize results/errors with the same observable semantics as the kcapk JS bridge.
+The generated `bin/<arch>/<platform>/share/lua/bridge.lua` contains the common bridge runtime logic with embedded kclib API metadata for the declared libraries. It includes everything needed at runtime:
+* common bridge runtime logic (JSON, FFI dispatch, JS facade generation);
+* generated kclib API descriptions (function names, parameter types, return types);
+* allowed library/function information;
+* argument/result conversion logic;
+* per-WebView exposure support.
+
+At runtime, `bridge.lua` is self-contained and does not load a separate metadata module.
 
 Unsupported public signatures fail at build time rather than exposing partial or unsafe behavior. Arbitrary library paths or native symbols are not exposed from JavaScript.
 

@@ -1,5 +1,5 @@
 -- bridge.lua
--- Summary: Internal kclib JavaScript bridge implementation for kcapp WebViews.
+-- Summary: kcapp bridge template with embedded API metadata placeholder.
 -- Author:  KaisarCode
 -- Website: https://kaisarcode.com
 -- License: GNU General Public License v3.0
@@ -8,11 +8,24 @@ local ffi = require("ffi")
 local kcapp = require("kcapp")
 local bridge = {}
 
-local bridge_api = nil
 local wvw_lib = nil
 local bridge_callback_ref = nil
 
--- Simple JSON encoder/decoder (subset for bridge use)
+-- ============================================================================
+-- EMBEDDED BRIDGE API METADATA (populated at build time)
+-- ============================================================================
+
+local bridge_api = {
+    version = 1,
+    libraries = {
+        @BRIDGE_API_LIBRARIES@
+    }
+}
+
+-- ============================================================================
+-- SIMPLE JSON ENCODER/DECODER (subset for bridge use)
+-- ============================================================================
+
 local json = {}
 
 function json.encode(val)
@@ -197,22 +210,9 @@ local function json_decode(str)
     return json.decode(str)
 end
 
-local function load_bridge_api()
-    if bridge_api then return bridge_api end
-    local path = "./share/lua/bridge_api.lua"
-    local f = io.open(path, "r")
-    if not f then
-        error("kcapp.bridge: missing bridge_api.lua at " .. path, 2)
-    end
-    local content = f:read("*a")
-    f:close()
-    local ok, api = pcall(loadstring, content)
-    if not ok then
-        error("kcapp.bridge: failed to load bridge_api.lua: " .. api, 2)
-    end
-    bridge_api = api()
-    return bridge_api
-end
+-- ============================================================================
+-- BRIDGE RUNTIME
+-- ============================================================================
 
 local function load_wvw()
     if wvw_lib then return wvw_lib end
@@ -297,8 +297,7 @@ local function bridge_dispatch(ctx, method, params_json, result_json_ptr, userda
     local fn_name = params.fn
     local args = params.args or {}
 
-    local api = load_bridge_api()
-    local lib_info = api.libraries[lib_name]
+    local lib_info = bridge_api.libraries[lib_name]
     if not lib_info then
         local err = json_encode({code = "LIB_NOT_FOUND", message = "Library not exposed: " .. lib_name})
         local err_ptr = ffi.new("char[?]", #err + 1)
@@ -347,12 +346,12 @@ local function bridge_dispatch(ctx, method, params_json, result_json_ptr, userda
 end
 
 function bridge.install(window, libs)
-    local api = load_bridge_api()
     local wvw = load_wvw()
 
+    -- Validate requested libraries exist in embedded metadata
     for _, lib_name in ipairs(libs) do
-        if not api.libraries[lib_name] then
-            error("kcapp.bridge: library not available in bridge_api: " .. lib_name, 2)
+        if not bridge_api.libraries[lib_name] then
+            error("kcapp.bridge: library not available in bridge: " .. lib_name, 2)
         end
     end
 
@@ -383,7 +382,7 @@ function bridge.install(window, libs)
 
     local js_setup = {}
     for _, lib_name in ipairs(libs) do
-        local lib_info = api.libraries[lib_name]
+        local lib_info = bridge_api.libraries[lib_name]
         local ns = {}
         for _, f in ipairs(lib_info.functions) do
             table.insert(ns, f.name)

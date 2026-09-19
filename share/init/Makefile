@@ -4,6 +4,9 @@
 ## Website: https://kaisarcode.com
 ## License: GNU GPL v3
 
+SHELL := /bin/bash
+.ONESHELL:
+
 KCLIB_DIST_DIR ?= $(abspath $(CURDIR)/../../../kclib/dist)
 LUAJIT_DIST_DIR ?= $(abspath $(CURDIR)/../../../luajit/dist)
 LUAJIT_INCLUDE_DIR ?= $(abspath $(CURDIR)/../../../vendor/luajit/src)
@@ -20,7 +23,7 @@ SHARE_LUA_DIR := $(PROJECT_DIR)/../../share/lua
 OUT_DIR := $(PROJECT_DIR)/bin
 RUN_C := $(PROJECT_DIR)/../../share/run/run.c
 RUN_INCLUDE_DIR := $(PROJECT_DIR)/../../share/run
-GEN_BRIDGE_API := $(PROJECT_DIR)/../../scripts/gen_bridge_api.lua
+GEN_BRIDGE := $(PROJECT_DIR)/../../share/gen_bridge.lua
 
 KC_LIBS := $(if $(wildcard $(CONFIG)),$(shell awk -v key='"kclib"' '{ buf = buf " " $$0 } END { if (match(buf, key "[[:space:]]*:[[:space:]]*\\[")) { s = substr(buf, RSTART + RLENGTH); while (match(s, /"[^"]*"/)) { v = substr(s, RSTART + 1, RLENGTH - 2); print v; s = substr(s, RSTART + RLENGTH) } } }' "$(CONFIG)"),)
 PLATFORM_EXT_linux := so
@@ -111,18 +114,19 @@ wine:
 define compose
 @set -eu; \
 target='$@'; \
+arch='$(word 1,$(subst /, ,$@))'; \
+platform='$(word 2,$(subst /, ,$@))'; \
+out='$(OUT_DIR)/$@'; \
 case "$$target" in \
 	*/*/*|*../*) echo "kcapp: invalid target '$$target' (expected <arch>/<platform>)" >&2; exit 1 ;; \
 	*/*) ;; \
 	*) echo "kcapp: invalid target '$$target' (expected <arch>/<platform>)" >&2; exit 1 ;; \
 esac; \
-arch="$${target%%/*}"; \
-platform="$${target##*/}"; \
 [ -f '$(CONFIG)' ] || { echo "kcapp: missing config: $(CONFIG)" >&2; exit 1; }; \
 [ -f '$(SRC_DIR)/main.lua' ] || { echo "kcapp: missing source entry point: $(SRC_DIR)/main.lua" >&2; exit 1; }; \
 [ -f '$(SHARE_LUA_DIR)/kcapp.lua' ] || { echo "kcapp: missing shared Lua runtime: $(SHARE_LUA_DIR)/kcapp.lua" >&2; exit 1; }; \
-[ -f '$(SHARE_LUA_DIR)/bridge.lua' ] || { echo "kcapp: missing shared bridge runtime: $(SHARE_LUA_DIR)/bridge.lua" >&2; exit 1; }; \
-[ -f '$(GEN_BRIDGE_API)' ] || { echo "kcapp: missing bridge generator: $(GEN_BRIDGE_API)" >&2; exit 1; }; \
+[ -f '$(SHARE_LUA_DIR)/bridge.lua' ] || { echo "kcapp: missing shared bridge template: $(SHARE_LUA_DIR)/bridge.lua" >&2; exit 1; }; \
+[ -f '$(GEN_BRIDGE)' ] || { echo "kcapp: missing bridge generator: $(GEN_BRIDGE)" >&2; exit 1; }; \
 [ -f '$(RUN_C)' ] || { echo "kcapp: missing launcher source: $(RUN_C)" >&2; exit 1; }; \
 [ -f '$(LUAJIT_INCLUDE_DIR)/lua.h' ] || { echo "kcapp: missing LuaJIT headers: $(LUAJIT_INCLUDE_DIR)" >&2; exit 1; }; \
 case "$$platform" in \
@@ -137,13 +141,17 @@ esac; \
 ltarget='$(LUAJIT_DIST_DIR)/'"$$arch"'/'"$$platform"; \
 [ -x "$$compiler" ] || command -v "$$compiler" >/dev/null 2>&1 || { echo "kcapp: missing compiler for $$target: $$compiler" >&2; exit 1; }; \
 [ -f "$$ltarget/$$runtime" ] || { echo "kcapp: LuaJIT runtime not available for $$target: $$ltarget/$$runtime" >&2; exit 1; }; \
-out='$(OUT_DIR)/'"$$target"; \
 mkdir -p "$$out/lib" "$$out/src" "$$out/share/lua"; \
 rm -f "$$out/luajit" "$$out/luajit.exe" "$$out/main.lua"; \
 cp -R '$(SRC_DIR)/.' "$$out/src/"; \
 cp -R '$(SHARE_LUA_DIR)/.' "$$out/share/lua/"; \
 if [ -f '$(README)' ]; then cp '$(README)' "$$out/README.md"; fi; \
-luajit "$(GEN_BRIDGE_API)" "$(KCLIB_DIST_DIR)" "$$arch" "$$platform" "$$out/share/lua/bridge_api.lua" $(KC_LIBS); \
+\
+# GENERATE BRIDGE.LUA WITH EMBEDDED METADATA
+echo "kcapp: generating bridge.lua for $@"; \
+luajit "$(GEN_BRIDGE)" "$(KCLIB_DIST_DIR)" "$(word 1,$(subst /, ,$@))" "$(word 2,$(subst /, ,$@))" "$(SHARE_LUA_DIR)/bridge.lua" "$(OUT_DIR)/$@/share/lua/bridge.lua" $(KC_LIBS); \
+echo "kcapp: bridge.lua generated, size: $$(wc -c < "$(OUT_DIR)/$@/share/lua/bridge.lua")"; \
+\
 case "$$platform" in \
 linux) cp "$$ltarget/$$runtime" "$$out/lib/"; ln -sf "$$runtime" "$$out/lib/libluajit-5.1.so.2"; "$$compiler" -std=c11 -I'$(LUAJIT_INCLUDE_DIR)' -I'$(RUN_INCLUDE_DIR)' '$(RUN_C)' -L"$$ltarget" -Wl,-rpath,'$$ORIGIN/lib' -lluajit -o "$$out/$$executable" ;; \
 windows) [ -f "$$ltarget/libluajit.dll.a" ] || { echo "kcapp: missing LuaJIT linker artifact for $$target" >&2; exit 1; }; cp "$$ltarget/$$runtime" "$$out/"; "$$compiler" -std=c11 -I'$(LUAJIT_INCLUDE_DIR)' -I'$(RUN_INCLUDE_DIR)' '$(RUN_C)' "$$ltarget/libluajit.dll.a" -o "$$out/$$executable" ;; \
