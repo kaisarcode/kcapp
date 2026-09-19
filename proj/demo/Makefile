@@ -23,7 +23,7 @@ SHARE_LUA_DIR := $(PROJECT_DIR)/../../share/lua
 OUT_DIR := $(PROJECT_DIR)/bin
 RUN_C := $(PROJECT_DIR)/../../share/run/run.c
 RUN_INCLUDE_DIR := $(PROJECT_DIR)/../../share/run
-GEN_BRIDGE := $(PROJECT_DIR)/../../share/gen_bridge.lua
+GEN_BRIDGE := $(SHARE_LUA_DIR)/gen-bridge.lua
 
 KC_LIBS := $(if $(wildcard $(CONFIG)),$(shell awk -v key='"kclib"' '{ buf = buf " " $$0 } END { if (match(buf, key "[[:space:]]*:[[:space:]]*\\[")) { s = substr(buf, RSTART + RLENGTH); while (match(s, /"[^"]*"/)) { v = substr(s, RSTART + 1, RLENGTH - 2); print v; s = substr(s, RSTART + RLENGTH) } } }' "$(CONFIG)"),)
 PLATFORM_EXT_linux := so
@@ -148,9 +148,7 @@ cp -R '$(SHARE_LUA_DIR)/.' "$$out/share/lua/"; \
 if [ -f '$(README)' ]; then cp '$(README)' "$$out/README.md"; fi; \
 \
 # GENERATE BRIDGE.LUA WITH EMBEDDED METADATA
-echo "kcapp: generating bridge.lua for $@"; \
 luajit "$(GEN_BRIDGE)" "$(KCLIB_DIST_DIR)" "$(word 1,$(subst /, ,$@))" "$(word 2,$(subst /, ,$@))" "$(SHARE_LUA_DIR)/bridge.lua" "$(OUT_DIR)/$@/share/lua/bridge.lua" $(KC_LIBS); \
-echo "kcapp: bridge.lua generated, size: $$(wc -c < "$(OUT_DIR)/$@/share/lua/bridge.lua")"; \
 \
 case "$$platform" in \
 linux) cp "$$ltarget/$$runtime" "$$out/lib/"; ln -sf "$$runtime" "$$out/lib/libluajit-5.1.so.2"; "$$compiler" -std=c11 -I'$(LUAJIT_INCLUDE_DIR)' -I'$(RUN_INCLUDE_DIR)' '$(RUN_C)' -L"$$ltarget" -Wl,-rpath,'$$ORIGIN/lib' -lluajit -o "$$out/$$executable" ;; \
