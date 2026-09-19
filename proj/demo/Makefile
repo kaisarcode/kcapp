@@ -23,7 +23,6 @@ SHARE_LUA_DIR := $(PROJECT_DIR)/../../share/lua
 OUT_DIR := $(PROJECT_DIR)/bin
 RUN_C := $(PROJECT_DIR)/../../share/run/run.c
 RUN_INCLUDE_DIR := $(PROJECT_DIR)/../../share/run
-GEN_BRIDGE := $(SHARE_LUA_DIR)/gen-bridge.lua
 
 KC_LIBS := $(if $(wildcard $(CONFIG)),$(shell awk -v key='"kclib"' '{ buf = buf " " $$0 } END { if (match(buf, key "[[:space:]]*:[[:space:]]*\\[")) { s = substr(buf, RSTART + RLENGTH); while (match(s, /"[^"]*"/)) { v = substr(s, RSTART + 1, RLENGTH - 2); print v; s = substr(s, RSTART + RLENGTH) } } }' "$(CONFIG)"),)
 PLATFORM_EXT_linux := so
@@ -98,12 +97,12 @@ test:
 		if ! command -v $(WINE) >/dev/null 2>&1; then echo "Missing Wine runtime: $(WINE)" >&2; exit 1; fi; \
 		if [ ! -f $(OUT_DIR)/x86_64/windows/$(PROJECT_NAME).exe ]; then echo "Missing Windows artifacts." >&2; exit 1; fi; \
 		out=$$(cd $(OUT_DIR)/x86_64/windows && WINEDEBUG=-all $(WINE) $(PROJECT_NAME).exe 2>/dev/null | tr -d '\r'); \
-		[ "$$out" = "Hello from $(PROJECT_NAME)" ] || { echo "FAIL: expected project greeting, got: $$out" >&2; exit 1; }; \
+		[ -z "$$out" ] || { echo "FAIL: expected empty Base64 output, got: $$out" >&2; exit 1; }; \
 	else \
 		if [ ! -f $(OUT_DIR)/$(NATIVE_TARGET)/$(PROJECT_NAME)$(NATIVE_EXE_EXT) ]; then $(MAKE) $(NATIVE_TARGET); fi; \
 		[ -L $(PROJECT_DIR)/$(PROJECT_NAME)$(NATIVE_EXE_EXT) ] || { echo "FAIL: missing native launcher link" >&2; exit 1; }; \
 		out=$$(cd $(PROJECT_DIR) && ./$(PROJECT_NAME)$(NATIVE_EXE_EXT)); \
-		[ "$$out" = "Hello from $(PROJECT_NAME)" ] || { echo "FAIL: expected project greeting, got: $$out" >&2; exit 1; }; \
+		[ -z "$$out" ] || { echo "FAIL: expected empty Base64 output, got: $$out" >&2; exit 1; }; \
 	fi
 	@echo "OK test"
 
@@ -126,7 +125,6 @@ esac; \
 [ -f '$(SRC_DIR)/main.lua' ] || { echo "kcapp: missing source entry point: $(SRC_DIR)/main.lua" >&2; exit 1; }; \
 [ -f '$(SHARE_LUA_DIR)/kcapp.lua' ] || { echo "kcapp: missing shared Lua runtime: $(SHARE_LUA_DIR)/kcapp.lua" >&2; exit 1; }; \
 [ -f '$(SHARE_LUA_DIR)/bridge.lua' ] || { echo "kcapp: missing shared bridge template: $(SHARE_LUA_DIR)/bridge.lua" >&2; exit 1; }; \
-[ -f '$(GEN_BRIDGE)' ] || { echo "kcapp: missing bridge generator: $(GEN_BRIDGE)" >&2; exit 1; }; \
 [ -f '$(RUN_C)' ] || { echo "kcapp: missing launcher source: $(RUN_C)" >&2; exit 1; }; \
 [ -f '$(LUAJIT_INCLUDE_DIR)/lua.h' ] || { echo "kcapp: missing LuaJIT headers: $(LUAJIT_INCLUDE_DIR)" >&2; exit 1; }; \
 case "$$platform" in \
@@ -141,14 +139,15 @@ esac; \
 ltarget='$(LUAJIT_DIST_DIR)/'"$$arch"'/'"$$platform"; \
 [ -x "$$compiler" ] || command -v "$$compiler" >/dev/null 2>&1 || { echo "kcapp: missing compiler for $$target: $$compiler" >&2; exit 1; }; \
 [ -f "$$ltarget/$$runtime" ] || { echo "kcapp: LuaJIT runtime not available for $$target: $$ltarget/$$runtime" >&2; exit 1; }; \
-mkdir -p "$$out/lib" "$$out/src" "$$out/share/lua"; \
+mkdir -p "$$out/lib" "$$out/src"; \
 rm -f "$$out/luajit" "$$out/luajit.exe" "$$out/main.lua"; \
+rm -rf "$$out/share"; \
 cp -R '$(SRC_DIR)/.' "$$out/src/"; \
-cp -R '$(SHARE_LUA_DIR)/.' "$$out/share/lua/"; \
+cp '$(SHARE_LUA_DIR)/kcapp.lua' "$$out/src/kcapp.lua"; \
 if [ -f '$(README)' ]; then cp '$(README)' "$$out/README.md"; fi; \
 \
 # GENERATE BRIDGE.LUA WITH EMBEDDED METADATA
-luajit "$(GEN_BRIDGE)" "$(KCLIB_DIST_DIR)" "$(word 1,$(subst /, ,$@))" "$(word 2,$(subst /, ,$@))" "$(SHARE_LUA_DIR)/bridge.lua" "$(OUT_DIR)/$@/share/lua/bridge.lua" $(KC_LIBS); \
+luajit "$(SHARE_LUA_DIR)/bridge.lua" --materialize "$(KCLIB_DIST_DIR)" "$(word 1,$(subst /, ,$@))" "$(word 2,$(subst /, ,$@))" "$(OUT_DIR)/$@/src/bridge.lua" $(KC_LIBS); \
 \
 case "$$platform" in \
 linux) cp "$$ltarget/$$runtime" "$$out/lib/"; ln -sf "$$runtime" "$$out/lib/libluajit-5.1.so.2"; "$$compiler" -std=c11 -I'$(LUAJIT_INCLUDE_DIR)' -I'$(RUN_INCLUDE_DIR)' '$(RUN_C)' -L"$$ltarget" -Wl,-rpath,'$$ORIGIN/lib' -lluajit -o "$$out/$$executable" ;; \

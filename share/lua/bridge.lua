@@ -1,3 +1,41 @@
+if arg[1] == "--materialize" then
+    local function read_file(path)
+        local file = assert(io.open(path, "rb"))
+        local content = file:read("*a")
+        file:close()
+        return content
+    end
+    local function write_file(path, content)
+        local file = assert(io.open(path, "wb"))
+        file:write(content)
+        file:close()
+    end
+    local dist, arch, platform, output = arg[2], arg[3], arg[4], arg[5]
+    local libraries = {}
+    for index = 6, #arg do libraries[#libraries + 1] = arg[index] end
+    table.sort(libraries)
+    local jq = [[def q: @json;
+      .. | objects | select(.kind? == "FunctionDecl") | select(.name | startswith("kc_"))
+      | {name: .name, result: (.type.qualType | capture("^(?<value>.*) ?\\(").value), parameters: [.inner[]? | select(.kind == "ParmVarDecl") | (.type.desugaredQualType // .type.qualType)]}
+      | "        { name = " + (.name|q) + ", ret_type = " + (.result|q) + ", params = {" + ([.parameters[] | "{ type = " + (. | q) + " }"] | join(", ")) + " } },"]]
+    local metadata = {}
+    for _, library in ipairs(libraries) do
+        local directory = dist .. "/" .. library .. ".c/" .. arch .. "/" .. platform
+        local header = directory .. "/lib" .. library .. ".h"
+        local command = string.format("clang -fsyntax-only -I %q -Xclang -ast-dump=json -x c %q 2>/dev/null | jq -r %q", directory, header, jq)
+        local process = assert(io.popen(command, "r"))
+        local functions = process:read("*a")
+        assert(process:close())
+        if functions == "" then error("kcapp bridge: no public API discovered for " .. library) end
+        metadata[#metadata + 1] = "    [" .. string.format("%q", library) .. "] = { functions = {\n" .. functions .. "    } },"
+    end
+    local source = read_file(arg[0])
+    source = source:gsub("^.-\nend\n\n", "", 1)
+    source = source:gsub("        %-%- @BRIDGE_API_LIBRARIES@", table.concat(metadata, "\n"), 1)
+    write_file(output, source)
+    os.exit(0)
+end
+
 -- bridge.lua
 -- Summary: kcapp bridge template with embedded API metadata placeholder.
 -- Author:  KaisarCode
@@ -8,8 +46,10 @@ local ffi = require("ffi")
 local kcapp = require("kcapp")
 local bridge = {}
 
+ffi.cdef[[void *malloc(size_t size);]]
+
 local wvw_lib = nil
-local bridge_callback_ref = nil
+local bridge_states = {}
 
 -- ============================================================================
 -- EMBEDDED BRIDGE API METADATA (populated at build time)
@@ -18,7 +58,7 @@ local bridge_callback_ref = nil
 local bridge_api = {
     version = 1,
     libraries = {
-        @BRIDGE_API_LIBRARIES@
+        -- @BRIDGE_API_LIBRARIES@
     }
 }
 
@@ -27,6 +67,12 @@ local bridge_api = {
 -- ============================================================================
 
 local json = {}
+
+local function utf8_char(codepoint)
+    if codepoint <= 0x7f then return string.char(codepoint) end
+    if codepoint <= 0x7ff then return string.char(0xc0 + math.floor(codepoint / 0x40), 0x80 + codepoint % 0x40) end
+    return string.char(0xe0 + math.floor(codepoint / 0x1000), 0x80 + math.floor(codepoint / 0x40) % 0x40, 0x80 + codepoint % 0x40)
+end
 
 function json.encode(val)
     local t = type(val)
@@ -137,7 +183,7 @@ function json.decode(str)
                     pos = pos + 1
                     local hex = str:sub(pos, pos + 3)
                     pos = pos + 4
-                    table.insert(result, utf8.char(tonumber(hex, 16)))
+                    table.insert(result, utf8_char(tonumber(hex, 16)))
                 else
                     local escapes = {['"'] = '"', ['\\'] = '\\', ['/'] = '/', ['b'] = '\b', ['f'] = '\f', ['n'] = '\n', ['r'] = '\r', ['t'] = '\t'}
                     table.insert(result, escapes[esc] or esc)
@@ -283,13 +329,25 @@ local function convert_ffi_result_to_js(func_info, result)
     end
 end
 
+local function bridge_result(result_json_ptr, value)
+    local buffer = ffi.C.malloc(#value + 1)
+    if buffer == nil then return false end
+    ffi.copy(buffer, value, #value)
+    ffi.cast("char *", buffer)[#value] = 0
+    ffi.cast("char **", result_json_ptr)[0] = ffi.cast("char *", buffer)
+    return true
+end
+
 local function bridge_dispatch(ctx, method, params_json, result_json_ptr, userdata)
+    local state = bridge_states[tostring(ctx)]
+    if method ~= "kcapp_bridge" or not state then
+        bridge_result(result_json_ptr, json_encode({code = "METHOD_NOT_FOUND", message = "Bridge method not available"}))
+        return -1
+    end
     local ok, params = pcall(json_decode, params_json)
     if not ok then
         local err = json_encode({code = "INVALID_PARAMS", message = "Invalid JSON params"})
-        local err_ptr = ffi.new("char[?]", #err + 1)
-        ffi.copy(err_ptr, err)
-        ffi.cast("char **", result_json_ptr)[0] = err_ptr
+        bridge_result(result_json_ptr, err)
         return 0
     end
 
@@ -298,11 +356,9 @@ local function bridge_dispatch(ctx, method, params_json, result_json_ptr, userda
     local args = params.args or {}
 
     local lib_info = bridge_api.libraries[lib_name]
-    if not lib_info then
+    if not lib_info or not state.libraries[lib_name] then
         local err = json_encode({code = "LIB_NOT_FOUND", message = "Library not exposed: " .. lib_name})
-        local err_ptr = ffi.new("char[?]", #err + 1)
-        ffi.copy(err_ptr, err)
-        ffi.cast("char **", result_json_ptr)[0] = err_ptr
+        bridge_result(result_json_ptr, err)
         return 0
     end
 
@@ -316,9 +372,7 @@ local function bridge_dispatch(ctx, method, params_json, result_json_ptr, userda
 
     if not func_info then
         local err = json_encode({code = "FUNC_NOT_FOUND", message = "Function not found: " .. fn_name})
-        local err_ptr = ffi.new("char[?]", #err + 1)
-        ffi.copy(err_ptr, err)
-        ffi.cast("char **", result_json_ptr)[0] = err_ptr
+        bridge_result(result_json_ptr, err)
         return 0
     end
 
@@ -331,17 +385,13 @@ local function bridge_dispatch(ctx, method, params_json, result_json_ptr, userda
 
     if not ok then
         local err = json_encode({code = "EXEC_ERROR", message = "FFI call failed: " .. tostring(result)})
-        local err_ptr = ffi.new("char[?]", #err + 1)
-        ffi.copy(err_ptr, err)
-        ffi.cast("char **", result_json_ptr)[0] = err_ptr
+        bridge_result(result_json_ptr, err)
         return 0
     end
 
     local js_result = convert_ffi_result_to_js(func_info, result)
     local result_json = json_encode(js_result)
-    local result_ptr = ffi.new("char[?]", #result_json + 1)
-    ffi.copy(result_ptr, result_json)
-    ffi.cast("char **", result_json_ptr)[0] = result_ptr
+    if not bridge_result(result_json_ptr, result_json) then return -1 end
     return 0
 end
 
@@ -355,6 +405,7 @@ function bridge.install(window, libs)
         end
     end
 
+    local state = {libraries = {}}
     local bridge_methods = {"kcapp_bridge"}
     local bridge_opts = ffi.new("kc_wvw_bridge_options_t")
     bridge_opts.methods = ffi.new("const char*[?]", #bridge_methods)
@@ -366,14 +417,17 @@ function bridge.install(window, libs)
     bridge_opts.allow_data = 0
     bridge_opts.allow_localhost = 0
 
-    bridge_callback_ref = ffi.cast("kc_wvw_bridge_callback_t", bridge_dispatch)
-    bridge_opts.callback = bridge_callback_ref
+    for _, lib_name in ipairs(libs) do state.libraries[lib_name] = true end
+    state.callback = ffi.cast("kc_wvw_bridge_callback_t", bridge_dispatch)
+    bridge_opts.callback = state.callback
     bridge_opts.userdata = nil
 
     local wvw_ctx = window._wvw_ctx
     if not wvw_ctx then
         error("kcapp.bridge: window missing _wvw_ctx", 2)
     end
+
+    bridge_states[tostring(wvw_ctx)] = state
 
     local ret = wvw.kc_wvw_enable_bridge(wvw_ctx, bridge_opts)
     if ret ~= 0 then
@@ -391,7 +445,10 @@ function bridge.install(window, libs)
     end
 
     local js_code = bridge.generate_js_facade(js_setup)
-    wvw.kc_wvw_post_bridge_event(wvw_ctx, js_code)
+    if wvw.kc_wvw_add_init_script(wvw_ctx, js_code) ~= 0 then
+        bridge_states[tostring(wvw_ctx)] = nil
+        error("kcapp.bridge: failed to install JavaScript facade", 2)
+    end
 end
 
 function bridge.generate_js_facade(lib_map)

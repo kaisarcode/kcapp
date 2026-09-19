@@ -131,7 +131,6 @@ static int kc_run_set_package_path(lua_State *state) {
         return 1;
     }
     lua_pushfstring(state,
-                    "./share/lua/?.lua;./share/lua/?/init.lua;"
                     "./src/?.lua;./src/?/init.lua;%s",
                     path);
     lua_setfield(state, -3, "path");

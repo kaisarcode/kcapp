@@ -57,7 +57,7 @@ SGVsbG8=
 
 Every composed application exposes its own native executable (`demo` on Linux and macOS, `demo.exe` on Windows). The executable runs `src/main.lua` relative to its own application directory, so it can be started from any current working directory. The standalone LuaJIT executable is not distributed as an end-user entry point.
 
-Each generated application also includes the shared Lua runtime under `share/lua/`. The launcher makes both that directory and the application `src/` tree available through Lua's module search path.
+Each generated application places the shared Lua runtime modules in `src/`. The launcher makes that application source tree available through Lua's module search path.
 
 ## Scripts
 
@@ -210,7 +210,7 @@ kcapp/
 
 The complete project `src/` directory is copied to each application build. This keeps Lua modules, assets, configuration, and nested resources in their original structure.
 
-`share/lua/kcapp.lua` is copied into each generated application. Application code can load shared and local modules with `require`, including `require("kcapp")`, without modifying `package.path` itself.
+`kcapp.lua` is copied into each generated application `src/` directory. Application code can load shared and local modules with `require`, including `require("kcapp")`, without modifying `package.path` itself.
 
 `bin/` contains generated runnable build targets for a project.
 

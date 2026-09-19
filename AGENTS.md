@@ -12,7 +12,7 @@ Each composed application exposes its own project-named native executable. The l
 
 `share/lua/kcapp.lua` is the shared Lua runtime module for all applications. Project Lua code must use `require("kcapp")` instead of duplicating shared kclib-loading helpers.
 
-`share/lua/bridge.lua` is the common bridge source/template/infrastructure. It is not the final application bridge and is not copied verbatim. During the project build, it is combined with project-specific kclib API metadata to materialize the generated `bin/<arch>/<platform>/share/lua/bridge.lua`.
+`share/lua/bridge.lua` is the common bridge source/template/infrastructure. It is not the final application bridge and is not copied verbatim. During the project build, it is combined with project-specific kclib API metadata to materialize the generated `bin/<arch>/<platform>/src/bridge.lua`.
 
 ## Main principle
 
@@ -67,7 +67,7 @@ kcapp/
 
 `bin/` is project-local generated output for runnable target directories.
 
-Generated applications include the shared Lua runtime under `share/lua/`. The launcher prepends `share/lua` and `src` module paths to Lua's `package.path`, while retaining the existing path entries.
+Generated applications place the shared Lua runtime modules in `src/`. The launcher prepends `src` module paths to Lua's `package.path`, while retaining the existing path entries.
 
 `dist/` contains distributable application packages.
 
@@ -124,10 +124,10 @@ bin/<arch>/<platform>/
 ├── README.md
 ├── src/
 │   └── main.lua
-├── share/
-│   └── lua/
-│       ├── kcapp.lua
-│       └── bridge.lua
+├── src/
+│   ├── main.lua
+│   ├── kcapp.lua
+│   └── bridge.lua
 └── lib/
     └── ...
 ```
@@ -191,7 +191,7 @@ A kclib being present in `config.json` means it is available to the Lua backend.
 
 Bridge metadata is generated automatically during the project build from the public headers of the kclibs declared in `config.json`. No handwritten JS bindings or per-function metadata are required. No separate generator script is used; generation is an internal step of the project `make`.
 
-The generated `bin/<arch>/<platform>/share/lua/bridge.lua` contains the common bridge runtime logic with embedded kclib API metadata for the declared libraries. It includes everything needed at runtime:
+The generated `bin/<arch>/<platform>/src/bridge.lua` contains the common bridge runtime logic with embedded kclib API metadata for the declared libraries. It includes everything needed at runtime:
 * common bridge runtime logic (JSON, FFI dispatch, JS facade generation);
 * generated kclib API descriptions (function names, parameter types, return types);
 * allowed library/function information;
@@ -389,9 +389,9 @@ Keep each project README specific to the actual application. Do not use a generi
 * If a target directory or any required artifact is missing, fail clearly.
 * Preserve the complete `src/` tree, including nested modules, assets, and configuration.
 * Do not transform Lua code, generate bindings, or generate wrappers.
-* Copy the shared Lua runtime to `share/lua/` in generated applications without copying it into project source trees.
+* Copy the shared Lua runtime modules to generated application `src/` without copying them into project source trees.
 * The launcher must resolve the real executable location before deriving the application root, including when invoked through a symlink.
-* The launcher must expose `share/lua` and `src` through Lua's `package.path`.
+* The launcher must expose `src` through Lua's `package.path`.
 * The launcher must execute `src/main.lua` relative to the application root.
 
 ## Structure and dependencies
