@@ -187,7 +187,7 @@ A kclib being present in `config.json` means it is available to the Lua backend.
 
 ### Build-time API generation
 
-Bridge metadata is generated automatically during the project build from the public headers of the kclibs declared in `config.json`. No handwritten JS bindings or per-function metadata are required. No separate generator script is used; generation is an internal step of the project `make`.
+Bridge metadata is generated automatically during the project build from the distributed `.cdef` files of the kclibs declared in `config.json`. No handwritten JS bindings or per-function metadata are required. No separate generator script is used; generation is an internal step of the project `make`.
 
 The generated `bin/<arch>/<platform>/src/bridge.lua` contains the common bridge runtime logic with embedded kclib API metadata for the declared libraries. It includes everything needed at runtime:
 * common bridge runtime logic (JSON, FFI dispatch, JS facade generation);
