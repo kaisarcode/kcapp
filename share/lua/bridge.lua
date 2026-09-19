@@ -22,6 +22,9 @@ if arg[1] == "--materialize" then
     for _, library in ipairs(libraries) do
         local directory = dist .. "/" .. library .. ".c/" .. arch .. "/" .. platform
         local header = directory .. "/lib" .. library .. ".h"
+        local input = io.open(header, "rb")
+        if not input then error("kcapp bridge: missing public header for " .. library .. ": " .. header) end
+        input:close()
         local command = string.format("clang -fsyntax-only -I %q -Xclang -ast-dump=json -x c %q 2>/dev/null | jq -r %q", directory, header, jq)
         local process = assert(io.popen(command, "r"))
         local functions = process:read("*a")
@@ -348,7 +351,7 @@ local function bridge_dispatch(ctx, method, params_json, result_json_ptr, userda
     if not ok then
         local err = json_encode({code = "INVALID_PARAMS", message = "Invalid JSON params"})
         bridge_result(result_json_ptr, err)
-        return 0
+        return -1
     end
 
     local lib_name = params.lib
@@ -359,7 +362,7 @@ local function bridge_dispatch(ctx, method, params_json, result_json_ptr, userda
     if not lib_info or not state.libraries[lib_name] then
         local err = json_encode({code = "LIB_NOT_FOUND", message = "Library not exposed: " .. lib_name})
         bridge_result(result_json_ptr, err)
-        return 0
+        return -1
     end
 
     local func_info = nil
@@ -373,20 +376,19 @@ local function bridge_dispatch(ctx, method, params_json, result_json_ptr, userda
     if not func_info then
         local err = json_encode({code = "FUNC_NOT_FOUND", message = "Function not found: " .. fn_name})
         bridge_result(result_json_ptr, err)
-        return 0
+        return -1
     end
 
-    local lib = kcapp.load(lib_name)
-    local ffi_args = convert_js_args_to_ffi(func_info, args)
-    
     local ok, result = pcall(function()
+        local lib = kcapp.load(lib_name)
+        local ffi_args = convert_js_args_to_ffi(func_info, args)
         return lib[fn_name](unpack(ffi_args))
     end)
 
     if not ok then
         local err = json_encode({code = "EXEC_ERROR", message = "FFI call failed: " .. tostring(result)})
         bridge_result(result_json_ptr, err)
-        return 0
+        return -1
     end
 
     local js_result = convert_ffi_result_to_js(func_info, result)
