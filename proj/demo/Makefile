@@ -34,7 +34,7 @@ LUAJIT_RUNTIME_macos := libluajit.dylib
 LUAJIT_TARGETS := $(sort $(foreach p,linux windows macos,$(foreach f,$(wildcard $(LUAJIT_DIST_DIR)/*/$(p)/$(LUAJIT_RUNTIME_$(p))),$(patsubst %/,%,$(patsubst $(LUAJIT_DIST_DIR)/%,%,$(dir $f))))))
 
 define lib_available
-$(if $(and $(wildcard $(KCLIB_DIST_DIR)/$(1).c/$(2)/lib$(1).cdef),$(wildcard $(KCLIB_DIST_DIR)/$(1).c/$(2)/lib$(1).$(PLATFORM_EXT_$(notdir $(2))))),1)
+$(if $(and $(wildcard $(KCLIB_DIST_DIR)/$(1).c/$(2)/lib$(1).h),$(wildcard $(KCLIB_DIST_DIR)/$(1).c/$(2)/lib$(1).cdef),$(wildcard $(KCLIB_DIST_DIR)/$(1).c/$(2)/lib$(1).$(PLATFORM_EXT_$(notdir $(2))))),1)
 endef
 
 KC_LIB_COUNT := $(words $(KC_LIBS))
@@ -155,13 +155,12 @@ windows) [ -f "$$ltarget/libluajit.dll.a" ] || { echo "kcapp: missing LuaJIT lin
 macos) cp "$$ltarget/$$runtime" "$$out/"; "$$compiler" -std=c11 -I'$(LUAJIT_INCLUDE_DIR)' -I'$(RUN_INCLUDE_DIR)' '$(RUN_C)' -L"$$ltarget" -Wl,-rpath,@loader_path -lluajit -o "$$out/$$executable" ;; \
 esac; \
 for dep in $(KC_LIBS); do \
-	ddir='$(KCLIB_DIST_DIR)/'"$$dep"'.c/'"$$arch"'/'"$$platform"; \
-	cdef="$$ddir/lib$$dep.cdef"; lib="$$ddir/lib$$dep$$lext"; \
-	if [ ! -f "$$cdef" ] || [ ! -f "$$lib" ]; then \
-		continue; \
-	fi; \
-	cp "$$cdef" "$$lib" "$$out/lib/"; \
-done; \
+ 	ddir='$(KCLIB_DIST_DIR)/'"$$dep"'.c/'"$$arch"'/'"$$platform"; \
+ 	cdef="$$ddir/lib$$dep.cdef"; lib="$$ddir/lib$$dep$$lext"; \
+ 	[ -f "$$cdef" ] || { echo "kcapp: missing cdef for $$dep: $$cdef" >&2; exit 1; }; \
+ 	[ -f "$$lib" ] || { echo "kcapp: missing shared library for $$dep: $$lib" >&2; exit 1; }; \
+ 	cp "$$cdef" "$$lib" "$$out/lib/"; \
+ done; \
 if [ "$$target" = "$(NATIVE_TARGET)" ]; then \
 	link='$(PROJECT_DIR)/'"$$executable"; \
 	if [ -e "$$link" ] && [ ! -L "$$link" ]; then echo "kcapp: native launcher path already exists: $$link" >&2; exit 1; fi; \

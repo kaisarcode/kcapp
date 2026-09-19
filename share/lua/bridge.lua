@@ -10,27 +10,55 @@ if arg[1] == "--materialize" then
         file:write(content)
         file:close()
     end
+
+    local function parse_cdef(content)
+        local functions = {}
+        for line in content:gmatch("[^\r\n]+") do
+            line = line:match("^%s*(.-)%s*$")
+            if line ~= "" and not line:match("^//") and not line:match("^#") and not line:match("^typedef") and not line:match("^enum") and not line:match("^{") and not line:match("^}") then
+                -- Match function declarations: return_type name(params);
+                -- Find the kc_ name that is followed by (
+                local name_start, name_end = line:find("kc_[%w_]+[%s%*]*%s*%(")
+                if name_start then
+                    local name = line:sub(name_start, name_end - 1)
+                    local ret_type = line:sub(1, name_start - 1):match("^%s*(.-)%s*$")
+                    local params_str = line:match("%((.*)%)")
+                    local params = {}
+                    if params_str and params_str ~= "void" and params_str ~= "" then
+                        for param in params_str:gmatch("[^,]+") do
+                            param = param:match("^%s*(.-)%s*$")
+                            if param ~= "" then
+                                table.insert(params, "{ type = " .. string.format("%q", param) .. " }")
+                            end
+                        end
+                    end
+                    table.insert(functions, string.format("        { name = %q, ret_type = %q, params = {%s} }", name, ret_type, table.concat(params, ", ")))
+                end
+            end
+        end
+        return functions
+    end
+
     local dist, arch, platform, output = arg[2], arg[3], arg[4], arg[5]
     local libraries = {}
     for index = 6, #arg do libraries[#libraries + 1] = arg[index] end
     table.sort(libraries)
-    local jq = [[def q: @json;
-      .. | objects | select(.kind? == "FunctionDecl") | select(.name | startswith("kc_"))
-      | {name: .name, result: (.type.qualType | capture("^(?<value>.*) ?\\(").value), parameters: [.inner[]? | select(.kind == "ParmVarDecl") | (.type.desugaredQualType // .type.qualType)]}
-      | "        { name = " + (.name|q) + ", ret_type = " + (.result|q) + ", params = {" + ([.parameters[] | "{ type = " + (. | q) + " }"] | join(", ")) + " } },"]]
     local metadata = {}
     for _, library in ipairs(libraries) do
         local directory = dist .. "/" .. library .. ".c/" .. arch .. "/" .. platform
+        local cdef_path = directory .. "/lib" .. library .. ".cdef"
         local header = directory .. "/lib" .. library .. ".h"
         local input = io.open(header, "rb")
         if not input then error("kcapp bridge: missing public header for " .. library .. ": " .. header) end
         input:close()
-        local command = string.format("clang -fsyntax-only -I %q -Xclang -ast-dump=json -x c %q 2>/dev/null | jq -r %q", directory, header, jq)
-        local process = assert(io.popen(command, "r"))
-        local functions = process:read("*a")
-        assert(process:close())
-        if functions == "" then error("kcapp bridge: no public API discovered for " .. library) end
-        metadata[#metadata + 1] = "    [" .. string.format("%q", library) .. "] = { functions = {\n" .. functions .. "    } },"
+        local cdef_file = io.open(cdef_path, "rb")
+        if not cdef_file then error("kcapp bridge: missing cdef for " .. library .. ": " .. cdef_path) end
+        local cdef_content = cdef_file:read("*a")
+        cdef_file:close()
+        local functions = parse_cdef(cdef_content)
+        if #functions == 0 then error("kcapp bridge: no public API discovered for " .. library) end
+        table.sort(functions)
+        metadata[#metadata + 1] = "    [" .. string.format("%q", library) .. "] = { functions = {\n" .. table.concat(functions, ",\n") .. "\n    } },"
     end
     local source = read_file(arg[0])
     source = source:gsub("^.-\nend\n\n", "", 1)
@@ -50,6 +78,9 @@ local kcapp = require("kcapp")
 local bridge = {}
 
 ffi.cdef[[void *malloc(size_t size);]]
+
+local KC_WVW_OK = 0
+local KC_WVW_ERROR = -1
 
 local wvw_lib = nil
 local bridge_states = {}
@@ -345,13 +376,13 @@ local function bridge_dispatch(ctx, method, params_json, result_json_ptr, userda
     local state = bridge_states[tostring(ctx)]
     if method ~= "kcapp_bridge" or not state then
         bridge_result(result_json_ptr, json_encode({code = "METHOD_NOT_FOUND", message = "Bridge method not available"}))
-        return -1
+        return KC_WVW_ERROR
     end
     local ok, params = pcall(json_decode, params_json)
     if not ok then
         local err = json_encode({code = "INVALID_PARAMS", message = "Invalid JSON params"})
         bridge_result(result_json_ptr, err)
-        return -1
+        return KC_WVW_ERROR
     end
 
     local lib_name = params.lib
@@ -362,7 +393,7 @@ local function bridge_dispatch(ctx, method, params_json, result_json_ptr, userda
     if not lib_info or not state.libraries[lib_name] then
         local err = json_encode({code = "LIB_NOT_FOUND", message = "Library not exposed: " .. lib_name})
         bridge_result(result_json_ptr, err)
-        return -1
+        return KC_WVW_ERROR
     end
 
     local func_info = nil
@@ -376,7 +407,7 @@ local function bridge_dispatch(ctx, method, params_json, result_json_ptr, userda
     if not func_info then
         local err = json_encode({code = "FUNC_NOT_FOUND", message = "Function not found: " .. fn_name})
         bridge_result(result_json_ptr, err)
-        return -1
+        return KC_WVW_ERROR
     end
 
     local ok, result = pcall(function()
@@ -388,13 +419,13 @@ local function bridge_dispatch(ctx, method, params_json, result_json_ptr, userda
     if not ok then
         local err = json_encode({code = "EXEC_ERROR", message = "FFI call failed: " .. tostring(result)})
         bridge_result(result_json_ptr, err)
-        return -1
+        return KC_WVW_ERROR
     end
 
     local js_result = convert_ffi_result_to_js(func_info, result)
     local result_json = json_encode(js_result)
-    if not bridge_result(result_json_ptr, result_json) then return -1 end
-    return 0
+    if not bridge_result(result_json_ptr, result_json) then return KC_WVW_ERROR end
+    return KC_WVW_OK
 end
 
 function bridge.install(window, libs)
@@ -462,9 +493,21 @@ function bridge.generate_js_facade(lib_map)
     table.insert(parts, "window.NativeBridge.kcapp_bridge({lib:lib,fn:fn,args:args}).then(resolve).catch(reject);")
     table.insert(parts, "});};")
 
-    for lib_name, funcs in pairs(lib_map) do
-        table.insert(parts, "window.NativeBridge." .. lib_name .. "={};")
+    local lib_names = {}
+    for lib_name in pairs(lib_map) do
+        table.insert(lib_names, lib_name)
+    end
+    table.sort(lib_names)
+
+    for _, lib_name in ipairs(lib_names) do
+        local funcs = lib_map[lib_name]
+        local sorted_funcs = {}
         for _, fn in ipairs(funcs) do
+            table.insert(sorted_funcs, fn)
+        end
+        table.sort(sorted_funcs)
+        table.insert(parts, "window.NativeBridge." .. lib_name .. "={};")
+        for _, fn in ipairs(sorted_funcs) do
             table.insert(parts, "window.NativeBridge." .. lib_name .. "." .. fn .. "=function(...args){")
             table.insert(parts, "return window.NativeBridge._kcappBridgeSend('" .. lib_name .. "','" .. fn .. "',args);")
             table.insert(parts, "};")

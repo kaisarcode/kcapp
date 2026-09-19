@@ -33,14 +33,15 @@ Output:
 proj/demo/bin/x86_64/linux/
 ├── demo
 ├── src/
-│   └── main.lua
-├── share/
-│   └── lua/
-│       └── kcapp.lua
+│   ├── main.lua
+│   ├── kcapp.lua
+│   └── bridge.lua
 └── lib/
     ├── libb64.cdef
     ├── libb64.so
-    └── libluajit.so
+    ├── libluajit.so
+    ├── libwvw.cdef
+    └── libwvw.so
 ```
 
 From the output directory:
@@ -135,14 +136,15 @@ For example:
 demo-linux-x86_64.zip
 ├── demo
 ├── src/
-│   └── main.lua
-├── share/
-│   └── lua/
-│       └── kcapp.lua
+│   ├── main.lua
+│   ├── kcapp.lua
+│   └── bridge.lua
 ├── lib/
 │   ├── libb64.cdef
 │   ├── libb64.so
-│   └── libluajit.so
+│   ├── libluajit.so
+│   ├── libwvw.cdef
+│   └── libwvw.so
 └── SHA256SUM.txt
 ```
 
@@ -187,17 +189,24 @@ kcapp/
 ├── AGENTS.md
 ├── README.md
 ├── scripts/
+│   ├── init.sh
 │   ├── build.sh
 │   └── dist.sh
+├── share/
+│   ├── init/
+│   │   └── Makefile
+│   ├── lua/
+│   │   ├── kcapp.lua
+│   │   └── bridge.lua
+│   └── run/
+│       ├── run.c
+│       └── run.h
 ├── proj/
 │   └── demo/
 │       ├── Makefile
 │       ├── config.json
 │       ├── src/
 │       │   └── main.lua
-│       ├── share/
-│       │   └── lua/
-│       │       └── kcapp.lua
 │       └── bin/
 │           └── <arch>/<platform>/
 └── dist/
@@ -210,7 +219,7 @@ kcapp/
 
 The complete project `src/` directory is copied to each application build. This keeps Lua modules, assets, configuration, and nested resources in their original structure.
 
-`kcapp.lua` is copied into each generated application `src/` directory. Application code can load shared and local modules with `require`, including `require("kcapp")`, without modifying `package.path` itself.
+`kcapp.lua` and `bridge.lua` are copied into each generated application `src/` directory. Application code can load shared and local modules with `require`, including `require("kcapp")`, without modifying `package.path` itself.
 
 `bin/` contains generated runnable build targets for a project.
 
