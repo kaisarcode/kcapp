@@ -25,12 +25,16 @@ function kcapp.load(name)
         extension = ".dylib"
     end
 
-    return ffi.load("./lib/lib" .. name .. extension)
+    local lib = ffi.load("./lib/lib" .. name .. extension)
+    if not kcapp._loaded_libs then kcapp._loaded_libs = {} end
+    kcapp._loaded_libs[name] = lib
+    return lib
 end
 
 function kcapp.bridge(window, libs)
     local bridge = require("bridge")
-    return bridge.install(window, libs)
+    local wvw = kcapp._loaded_libs and kcapp._loaded_libs.wvw or nil
+    return bridge.install(window, libs, wvw)
 end
 
 return kcapp

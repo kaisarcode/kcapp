@@ -12,17 +12,45 @@ if arg[1] == "--materialize" then
     end
 
     local function parse_cdef(content)
-        local functions = {}
+        local lines = {}
         for line in content:gmatch("[^\r\n]+") do
-            line = line:match("^%s*(.-)%s*$")
-            if line == "" or line:match("^//") or line:match("^#") or line:match("^enum") or line:match("^typedef") then
+            table.insert(lines, line)
+        end
+
+        local declarations = {}
+        local current = ""
+        local paren_depth = 0
+        for _, line in ipairs(lines) do
+            local trimmed = line:match("^%s*(.-)%s*$")
+            if trimmed == "" or trimmed:match("^//") or trimmed:match("^#") then
                 goto continue
             end
-            local name_start, name_end = line:find("kc_[%w_]+[%s%*]*%s*%(")
+            current = current .. " " .. trimmed
+            for i = 1, #trimmed do
+                local c = trimmed:sub(i, i)
+                if c == "(" then paren_depth = paren_depth + 1 end
+                if c == ")" then paren_depth = paren_depth - 1 end
+            end
+            if paren_depth == 0 and current:match("[;{}]%s*$") then
+                local decl = current:match("^%s*(.-)%s*$")
+                if decl ~= "" then
+                    table.insert(declarations, decl)
+                end
+                current = ""
+            end
+            ::continue::
+        end
+
+        local functions = {}
+        for _, decl in ipairs(declarations) do
+            if decl:match("^enum") or decl:match("^typedef") then
+                goto continue
+            end
+            local name_start, name_end = decl:find("[%a_][%w_]*[%s%*]*%s*%(")
             if name_start then
-                local name = line:sub(name_start, name_end - 1)
-                local ret_type = line:sub(1, name_start - 1):match("^%s*(.-)%s*$")
-                local params_str = line:match("%((.*)%)")
+                local name = decl:sub(name_start, name_end - 1)
+                local ret_type = decl:sub(1, name_start - 1):match("^%s*(.-)%s*$")
+                local params_str = decl:match("%((.*)%)")
                 local params = {}
                 if params_str and params_str ~= "void" and params_str ~= "" then
                     for param in params_str:gmatch("[^,]+") do
@@ -301,7 +329,17 @@ end
 
 local function load_wvw()
     if wvw_lib then return wvw_lib end
-    wvw_lib = kcapp.load("wvw")
+    local ok, lib = pcall(kcapp.load, "wvw")
+    if not ok then
+        -- wvw already loaded by user, find it in package.loaded
+        for _, mod in pairs(package.loaded) do
+            if type(mod) == "table" and mod.kc_wvw_open then
+                return mod
+            end
+        end
+        error("kcapp.bridge: wvw not loaded")
+    end
+    wvw_lib = lib
     return wvw_lib
 end
 
@@ -433,8 +471,8 @@ local function bridge_dispatch(ctx, method, params_json, result_json_ptr, userda
     return KC_WVW_OK
 end
 
-function bridge.install(window, libs)
-    local wvw = load_wvw()
+function bridge.install(window, libs, wvw_lib)
+    local wvw = wvw_lib or load_wvw()
 
     -- Validate requested libraries exist in embedded metadata
     for _, lib_name in ipairs(libs) do
@@ -451,7 +489,7 @@ function bridge.install(window, libs)
         bridge_opts.methods[i-1] = m
     end
     bridge_opts.method_count = #bridge_methods
-    bridge_opts.allow_file = 0
+    bridge_opts.allow_file = 1
     bridge_opts.allow_data = 0
     bridge_opts.allow_localhost = 0
 
@@ -469,7 +507,9 @@ function bridge.install(window, libs)
 
     local ret = wvw.kc_wvw_enable_bridge(wvw_ctx, bridge_opts)
     if ret ~= 0 then
-        error("kcapp.bridge: failed to enable wvw bridge: " .. wvw.kc_wvw_get_error(wvw_ctx), 2)
+        local err = wvw.kc_wvw_get_error(wvw_ctx)
+        local err_str = (err ~= nil and err ~= ffi.NULL) and ffi.string(err) or "unknown error"
+        error("kcapp.bridge: failed to enable wvw bridge: " .. err_str, 2)
     end
 
     local js_setup = {}
