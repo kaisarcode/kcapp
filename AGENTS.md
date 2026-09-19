@@ -123,8 +123,6 @@ bin/<arch>/<platform>/
 ├── <project>
 ├── README.md
 ├── src/
-│   └── main.lua
-├── src/
 │   ├── main.lua
 │   ├── kcapp.lua
 │   └── bridge.lua
