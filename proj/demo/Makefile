@@ -12,7 +12,6 @@ LUAJIT_DIST_DIR ?= $(abspath $(CURDIR)/../../../luajit/dist)
 LUAJIT_INCLUDE_DIR ?= $(abspath $(CURDIR)/../../../vendor/luajit/src)
 XDG_DATA_HOME ?= $(HOME)/.local/share
 OSXCROSS_ROOT ?= $(XDG_DATA_HOME)/osxcross/target
-WINE ?= wine
 
 PROJECT_DIR := $(CURDIR)
 PROJECT_NAME := $(notdir $(PROJECT_DIR))
@@ -85,28 +84,13 @@ else
 .DEFAULT_GOAL := $(NATIVE_TARGET)
 endif
 
-.PHONY: all help test wine
+.PHONY: all help
 all: $(AVAILABLE_TARGETS)
 	@if [ -z '$(AVAILABLE_TARGETS)' ]; then echo "kcapp: no targets available for this project" >&2; exit 1; fi
 
 help:
-	@echo 'Usage: make [<arch>/<platform>|all|test]'
+	@echo 'Usage: make [<arch>/<platform>|all]'
 
-test:
-	@if [ -n "$(filter wine,$(MAKECMDGOALS))" ]; then \
-		if ! command -v $(WINE) >/dev/null 2>&1; then echo "Missing Wine runtime: $(WINE)" >&2; exit 1; fi; \
-		if [ ! -f $(OUT_DIR)/x86_64/windows/$(PROJECT_NAME).exe ]; then echo "Missing Windows artifacts." >&2; exit 1; fi; \
-		echo "Windows build verified."; \
-	else \
-		if [ ! -f $(OUT_DIR)/$(NATIVE_TARGET)/$(PROJECT_NAME)$(NATIVE_EXE_EXT) ]; then $(MAKE) $(NATIVE_TARGET); fi; \
-		[ -L $(PROJECT_DIR)/$(PROJECT_NAME)$(NATIVE_EXE_EXT) ] || { echo "FAIL: missing native launcher link" >&2; exit 1; }; \
-		echo "Native build verified."; \
-	fi
-	@echo "OK test"
-
-wine:
-	@if [ -z "$(filter test,$(MAKECMDGOALS)) ]; then echo "Use 'make test wine' to run tests through Wine." >&2; exit 1; fi
-	@:
 
 define compose
 @set -eu; \
