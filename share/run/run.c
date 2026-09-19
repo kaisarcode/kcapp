@@ -175,8 +175,10 @@ int kc_run_main(int argc, char **argv) {
     kc_run_set_arguments(state, argc, argv);
     status = luaL_loadfile(state, "src/main.lua");
     if (status == 0) status = lua_pcall(state, 0, LUA_MULTRET, 0);
-    if (status != 0) status = kc_run_error(state);
-    lua_close(state);
+    if (status != 0) {
+        status = kc_run_error(state);
+        lua_close(state);
+    }
     return status;
 }
 
