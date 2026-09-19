@@ -469,6 +469,12 @@ end
 local function convert_ffi_result_to_js(func_info, result)
     local ret_type = func_info.ret_type
     
+    -- Check if this is an output pattern function (returns handle via **out param)
+    local params = func_info.params
+    local is_output_pattern = (ret_type == "int" or ret_type == "size_t" or ret_type == "uint64_t") 
+        and #params == 1 
+        and params[1].type:match("%*%*")  -- contains **
+    
     if ret_type == "void" then
         return nil
     elseif ret_type == "const char *" or ret_type == "char *" then
@@ -478,10 +484,11 @@ local function convert_ffi_result_to_js(func_info, result)
         if result == nil then return nil end
         return handle_register(result)
     elseif ret_type == "uint64_t" or ret_type == "size_t" or ret_type == "int" or ret_type == "unsigned int" then
-        -- Check if result is actually a pointer (from output param handling)
-        if type(result) == "cdata" then
+        -- Output pattern functions return pointer via **out param despite int ret_type
+        if is_output_pattern and type(result) == "cdata" then
             return handle_register(result)
         end
+        -- Scalar integer types: always convert to number, never wrap as handle
         return tonumber(result)
     elseif ret_type:match("%*%s*$") then
         if result == nil then return nil end
