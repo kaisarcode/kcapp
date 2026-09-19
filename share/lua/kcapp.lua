@@ -8,6 +8,10 @@ local ffi = require("ffi")
 local kcapp = {}
 
 function kcapp.load(name)
+    if kcapp._loaded_libs and kcapp._loaded_libs[name] then
+        return kcapp._loaded_libs[name]
+    end
+    
     local path = "./lib/lib" .. name .. ".cdef"
     local definition, error_message = io.open(path, "r")
 
