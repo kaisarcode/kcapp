@@ -1,3 +1,9 @@
+-- main.lua
+-- Summary: kcapp demo application entry point.
+-- Author:  KaisarCode
+-- Website: https://kaisarcode.com
+-- License: GNU General Public License v3.0
+
 local ffi = require("ffi")
 local kcapp = require("kcapp")
 
@@ -5,8 +11,6 @@ ffi.cdef[[char *getcwd(char *buf, size_t size);]]
 
 local wvw = kcapp.load("wvw")
 
--- The launcher already chdir's to the application root
--- file:// URLs for absolute paths need 3 slashes: file:///absolute/path
 local cwd = ffi.C.getcwd(ffi.new("char[4096]"), 4096)
 local html_path = ffi.string(cwd) .. "/src/www/index.html"
 local url = "file://" .. html_path

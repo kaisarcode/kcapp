@@ -1,3 +1,9 @@
+-- bridge.lua - kcapp bridge template with embedded API metadata placeholder
+-- Summary: Common bridge runtime logic with build-time API generation for kclib JavaScript bridge.
+-- Author:  KaisarCode
+-- Website: https://kaisarcode.com
+-- License: https://www.gnu.org/licenses/gpl-3.0.html
+
 if arg[1] == "--materialize" then
     local function read_file(path)
         local file = assert(io.open(path, "rb"))
@@ -95,16 +101,10 @@ if arg[1] == "--materialize" then
     end
     local source = read_file(arg[0])
     source = source:gsub("^.-\nend\n\n", "", 1)
-    source = source:gsub("        %-%- @BRIDGE_API_LIBRARIES@", table.concat(metadata, "\n"), 1)
+    source = source:gsub("        \"@BRIDGE_API_LIBRARIES@\"", table.concat(metadata, "\n"), 1)
     write_file(output, source)
     os.exit(0)
 end
-
--- bridge.lua
--- Summary: kcapp bridge template with embedded API metadata placeholder.
--- Author:  KaisarCode
--- Website: https://kaisarcode.com
--- License: GNU General Public License v3.0
 
 local ffi = require("ffi")
 local kcapp = require("kcapp")
@@ -112,10 +112,12 @@ local bridge = {}
 
 ffi.cdef[[void *malloc(size_t size);]]
 
--- Opaque pointer handle registry
 local handle_registry = {}
 local handle_counter = 0
 
+-- Register a pointer as a handle.
+-- @param ptr cdata pointer to register
+-- @return table with __kcapp_handle or nil
 local function handle_register(ptr)
     if ptr == nil or ptr == ffi.NULL then
         return nil
@@ -126,6 +128,9 @@ local function handle_register(ptr)
     return {__kcapp_handle = id}
 end
 
+-- Unwrap a handle object to its raw pointer.
+-- @param obj table with __kcapp_handle or any value
+-- @return raw pointer or original value
 local function handle_unwrap(obj)
     if type(obj) == "table" and obj.__kcapp_handle then
         local id = obj.__kcapp_handle
@@ -144,23 +149,18 @@ local KC_WVW_ERROR = -1
 local wvw_lib = nil
 local bridge_states = {}
 
--- ============================================================================
--- EMBEDDED BRIDGE API METADATA (populated at build time)
--- ============================================================================
-
 local bridge_api = {
     version = 1,
     libraries = {
-        -- @BRIDGE_API_LIBRARIES@
+        "@BRIDGE_API_LIBRARIES@"
     }
 }
 
--- ============================================================================
--- SIMPLE JSON ENCODER/DECODER (subset for bridge use)
--- ============================================================================
-
 local json = {}
 
+-- Encode a codepoint as UTF-8 character.
+-- @param codepoint integer Unicode codepoint
+-- @return string UTF-8 encoded character
 local function utf8_char(codepoint)
     if codepoint <= 0x7f then return string.char(codepoint) end
     if codepoint <= 0x7ff then return string.char(0xc0 + math.floor(codepoint / 0x40), 0x80 + codepoint % 0x40) end
@@ -343,18 +343,22 @@ function json.decode(str)
     return result
 end
 
+-- Encode Lua value to JSON string.
+-- @param val any value
+-- @return string JSON
 local function json_encode(val)
     return json.encode(val)
 end
 
+-- Decode JSON string to Lua value.
+-- @param str string JSON
+-- @return any decoded value
 local function json_decode(str)
     return json.decode(str)
 end
 
--- ============================================================================
--- BRIDGE RUNTIME
--- ============================================================================
-
+-- Load wvw library with fallback.
+-- @return table wvw library module
 local function load_wvw()
     if wvw_lib then return wvw_lib end
     local ok, lib = pcall(kcapp.load, "wvw")
@@ -370,38 +374,13 @@ local function load_wvw()
     return wvw_lib
 end
 
--- Opaque pointer handle registry
-local handle_registry = {}
-local handle_counter = 0
-
-local function handle_register(ptr)
-    if ptr == nil or ptr == ffi.NULL then
-        return nil
-    end
-    handle_counter = handle_counter + 1
-    local id = handle_counter
-    handle_registry[id] = ptr
-    return {__kcapp_handle = id}
-end
-
-local function handle_unwrap(obj)
-    if type(obj) == "table" and obj.__kcapp_handle then
-        local id = obj.__kcapp_handle
-        local ptr = handle_registry[id]
-        if ptr == nil then
-            error("kcapp.bridge: invalid handle " .. id)
-        end
-        return ptr
-    end
-    return obj
-end
-
+-- Convert FFI type string to internal ctype category.
+-- @param ffi_type string C type declaration
+-- @return string category: void, string, number, pointer, unknown
 local function ffi_type_to_ctype(ffi_type)
     if ffi_type == "void" then return "void" end
-    -- Strip parameter name if present (e.g., "const char *id" -> "const char *")
     local base_type = ffi_type:match("^(.+%*)%s*[%w_]+$") or ffi_type:match("^(.+)%s+[%w_]+$") or ffi_type
     base_type = base_type:gsub("%s+$", "")
-    -- Check for output buffer pattern (char *err, char *buf, etc.)
     if ffi_type:match("char%s*%*%s*[eE][rR][rR]") or ffi_type:match("char%s*%*%s*[bB][uU][fF]") then
         return "pointer"
     end
@@ -412,6 +391,10 @@ local function ffi_type_to_ctype(ffi_type)
     return "unknown"
 end
 
+-- Convert JavaScript arguments to FFI arguments.
+-- @param func_info table function metadata
+-- @param js_args table array of JS values
+-- @return table array of FFI values
 local function convert_js_args_to_ffi(func_info, js_args)
     local ffi_args = {}
     local js_index = 1
@@ -420,19 +403,13 @@ local function convert_js_args_to_ffi(func_info, js_args)
         local js_val = js_args[js_index]
         local ctype = ffi_type_to_ctype(param.type)
         
-        -- Handle case where JS omits output buffer params (e.g., redp2p_set_vip skips err buffer)
-        -- If JS arg is number but C param is char* pointer, insert buffer and don't consume JS arg
         if js_val ~= nil and type(js_val) == "number" and ctype == "pointer" and param.type:match("char%s*%*") then
-            -- JS passed a number (err_cap) but C expects char* (err buffer)
-            -- Insert the buffer and process this param again with same JS arg
             local err_buf = ffi.new("char[256]")
             table.insert(ffi_args, err_buf)
         else
-            -- Normal case: consume JS arg
             js_val = js_args[js_index]
             js_index = js_index + 1
             
-            -- Now insert the value
             if ctype == "string" then
                 if type(js_val) ~= "string" then
                     error("kcapp.bridge: argument " .. i .. " must be string for " .. func_info.name, 2)
@@ -444,10 +421,8 @@ local function convert_js_args_to_ffi(func_info, js_args)
                 end
                 table.insert(ffi_args, js_val)
             elseif ctype == "pointer" then
-                -- Try to unwrap handle object
                 local unwrapped = handle_unwrap(js_val)
                 if unwrapped ~= js_val then
-                    -- It was a handle object, use the unwrapped pointer
                     table.insert(ffi_args, unwrapped)
                 elseif type(js_val) == "string" then
                     local buf = ffi.new("char[?]", #js_val + 1)
@@ -466,14 +441,17 @@ local function convert_js_args_to_ffi(func_info, js_args)
     return ffi_args
 end
 
+-- Convert FFI result to JavaScript value.
+-- @param func_info table function metadata
+-- @param result any FFI return value
+-- @return any JS-compatible value
 local function convert_ffi_result_to_js(func_info, result)
     local ret_type = func_info.ret_type
     
-    -- Check if this is an output pattern function (returns handle via **out param)
     local params = func_info.params
     local is_output_pattern = (ret_type == "int" or ret_type == "size_t" or ret_type == "uint64_t") 
         and #params == 1 
-        and params[1].type:match("%*%*")  -- contains **
+        and params[1].type:match("%*%*")
     
     if ret_type == "void" then
         return nil
@@ -484,11 +462,9 @@ local function convert_ffi_result_to_js(func_info, result)
         if result == nil then return nil end
         return handle_register(result)
     elseif ret_type == "uint64_t" or ret_type == "size_t" or ret_type == "int" or ret_type == "unsigned int" then
-        -- Output pattern functions return pointer via **out param despite int ret_type
         if is_output_pattern and type(result) == "cdata" then
             return handle_register(result)
         end
-        -- Scalar integer types: always convert to number, never wrap as handle
         return tonumber(result)
     elseif ret_type:match("%*%s*$") then
         if result == nil then return nil end
@@ -498,6 +474,10 @@ local function convert_ffi_result_to_js(func_info, result)
     end
 end
 
+-- Allocate and write JSON result to output pointer.
+-- @param result_json_ptr cdata output pointer
+-- @param value string JSON value
+-- @return boolean success
 local function bridge_result(result_json_ptr, value)
     local buffer = ffi.C.malloc(#value + 1)
     if buffer == nil then return false end
@@ -507,6 +487,13 @@ local function bridge_result(result_json_ptr, value)
     return true
 end
 
+-- Dispatch bridge call from WebView.
+-- @param ctx cdata WebView context
+-- @param method cdata method name
+-- @param params_json cdata JSON params
+-- @param result_json_ptr cdata output pointer
+-- @param userdata cdata user data
+-- @return integer KC_WVW_OK or KC_WVW_ERROR
 local function bridge_dispatch(ctx, method, params_json, result_json_ptr, userdata)
     local method_str = "UNKNOWN"
     if method ~= nil and method ~= ffi.NULL then
@@ -558,28 +545,25 @@ local function bridge_dispatch(ctx, method, params_json, result_json_ptr, userda
     end
 
     local function call_with_output_handling(lib, func_info, args)
-        -- Check if function has output parameter pattern: returns int, has single **out param
         local ret_type = func_info.ret_type
         local params = func_info.params
         
         local is_output_pattern = (ret_type == "int" or ret_type == "size_t" or ret_type == "uint64_t") 
             and #params == 1 
-            and params[1].type:match("%*%*")  -- contains **
+            and params[1].type:match("%*%*")
         
         if is_output_pattern then
-            -- Allocate output buffer - need to handle type like "redp2p_t **out"
-            local base_type = params[1].type:gsub("%s*%*%s*[%w_]+$", "")  -- remove param name and one *
-            base_type = base_type:gsub("%s+", "")  -- remove spaces
-            base_type = base_type:gsub("%*+$", "")  -- remove trailing *
+            local base_type = params[1].type:gsub("%s*%*%s*[%w_]+$", "")
+            base_type = base_type:gsub("%s+", "")
+            base_type = base_type:gsub("%*+$", "")
             local out_buf = ffi.new(base_type .. "*[1]")
             local ret = lib[func_info.name](out_buf)
             if ret == 0 then
                 return out_buf[0]
             else
-                return nil, ret  -- return nil and error code
+                return nil, ret
             end
         else
-            -- Normal call
             local ffi_args = convert_js_args_to_ffi(func_info, args)
             return lib[func_info.name](unpack(ffi_args))
         end
@@ -610,7 +594,6 @@ end
 function bridge.install(window, libs, wvw_lib)
     local wvw = wvw_lib or load_wvw()
 
-    -- Validate requested libraries exist in embedded metadata
     for _, lib_name in ipairs(libs) do
         if not bridge_api.libraries[lib_name] then
             error("kcapp.bridge: library not available in bridge: " .. lib_name, 2)
