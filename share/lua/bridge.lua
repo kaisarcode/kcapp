@@ -14,6 +14,16 @@ local KC_WVW_ERROR = -1
 local wvw_lib = nil
 local bridge_states = {}
 
+local reserved_methods = {
+    minimize = true,
+    maximize = true,
+    restore = true,
+    close = true,
+    setTitle = true,
+    setSize = true,
+    getState = true
+}
+
 local json = {}
 
 -- Encode a codepoint as UTF-8 character.
@@ -67,7 +77,7 @@ function json.encode(val)
             return "{" .. table.concat(parts, ",") .. "}"
         end
     else
-        return "null"
+        error("unsupported JSON value type: " .. t)
     end
 end
 
@@ -221,7 +231,7 @@ local function bridge_result(state, result_json_ptr, value)
     ffi.copy(buffer, value, #value)
     buffer[#value] = 0
     state.response = buffer
-    result_json_ptr[0] = buffer
+    result_json_ptr[0] = ffi.cast("const char *", buffer)
     return true
 end
 
@@ -323,6 +333,9 @@ function bridge.install(window, methods, loaded_wvw)
     for name, handler in pairs(methods) do
         if type(name) ~= "string" or name == "" then
             error("kcapp.bridge: method names must be non-empty strings", 2)
+        end
+        if reserved_methods[name] then
+            error("kcapp.bridge: method '" .. name .. "' is reserved by wvw", 2)
         end
         if type(handler) ~= "function" then
             error("kcapp.bridge: method '" .. name .. "' must be a function", 2)
