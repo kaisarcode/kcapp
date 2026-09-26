@@ -7,42 +7,67 @@
 local ffi = require("ffi")
 local kcapp = require("kcapp")
 
-ffi.cdef[[char *getcwd(char *buf, size_t size);]]
-
-local wvw = kcapp.load("wvw")
-
-local cwd = ffi.C.getcwd(ffi.new("char[4096]"), 4096)
-local html_path = ffi.string(cwd) .. "/src/www/index.html"
-local url = "file://" .. html_path
-
-local opts = wvw.kc_wvw_options_default()
-local url_buf = ffi.new("char[?]", #url + 1)
-ffi.copy(url_buf, url)
-opts.url = url_buf
-
-local title_buf = ffi.new("char[?]", #"Demo" + 1)
-ffi.copy(title_buf, "Demo")
-opts.title = title_buf
-
-local bg_buf = ffi.new("char[?]", #"101418" + 1)
-ffi.copy(bg_buf, "101418")
-opts.background = bg_buf
-
-opts.width = 900
-opts.height = 700
-
-local ctx_ptr = ffi.new("kc_wvw_t*[1]")
-local ret = wvw.kc_wvw_open(ctx_ptr, opts)
-if ret ~= 0 then
-    local err = wvw.kc_wvw_get_error(ctx_ptr[0])
-    error("kcapp demo: failed to open window: " .. (err and ffi.string(err) or "unknown error"))
+if ffi.os == "Windows" then
+    ffi.cdef[[void Sleep(unsigned long milliseconds);]]
+else
+    ffi.cdef[[int usleep(unsigned int usec);]]
 end
 
-local window = {}
-window._wvw_ctx = ctx_ptr[0]
+local wvw = kcapp.load("wvw")
+local redp2p = kcapp.load("redp2p")
 
-kcapp.bridge(window, {"redp2p"})
+local cwd_buffer = ffi.new("char[4096]")
+local cwd
+if ffi.os == "Windows" then
+    ffi.cdef[[char *_getcwd(char *buffer, int maxlen);]]
+    cwd = ffi.C._getcwd(cwd_buffer, 4096)
+else
+    ffi.cdef[[char *getcwd(char *buffer, size_t size);]]
+    cwd = ffi.C.getcwd(cwd_buffer, 4096)
+end
+if cwd == nil or cwd == ffi.NULL then
+    error("kcapp demo: cannot resolve application directory")
+end
 
-wvw.kc_wvw_loop(ctx_ptr[0])
+local url = "file://" .. ffi.string(cwd) .. "/src/www/index.html"
+if ffi.os == "Windows" then
+    url = "file:///" .. ffi.string(cwd):gsub("\\", "/") .. "/src/www/index.html"
+end
 
-wvw.kc_wvw_close(ctx_ptr[0])
+local width = ffi.new("int[1]", 900)
+local height = ffi.new("int[1]", 700)
+local options = ffi.new("kc_wvw_options_t[1]")
+options[0].url = url
+options[0].title = "Demo"
+options[0].background = "101418"
+options[0].width = width
+options[0].height = height
+
+local ctx = ffi.new("kc_wvw_t *[1]")
+if wvw.kc_wvw_open(ctx, options) ~= 0 then
+    local err = ctx[0] ~= nil and wvw.kc_wvw_get_error(ctx[0]) or nil
+    error("kcapp demo: failed to open window: " ..
+        ((err ~= nil and err ~= ffi.NULL) and ffi.string(err) or "unknown error"))
+end
+
+local window = {
+    _wvw_ctx = ctx[0]
+}
+
+kcapp.bridge(window, {
+    redp2pVersion = function()
+        return {
+            version = tonumber(redp2p.kc_redp2p_version())
+        }
+    end
+})
+
+while wvw.kc_wvw_is_visible(ctx[0]) == 1 do
+    if ffi.os == "Windows" then
+        ffi.C.Sleep(50)
+    else
+        ffi.C.usleep(50000)
+    end
+end
+
+wvw.kc_wvw_close(ctx[0])

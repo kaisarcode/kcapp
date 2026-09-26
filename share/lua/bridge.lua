@@ -1,160 +1,18 @@
--- bridge.lua - kcapp bridge template with embedded API metadata placeholder
--- Summary: Common bridge runtime logic with build-time API generation for kclib JavaScript bridge.
+-- bridge.lua
+-- Summary: Transports explicit Lua methods through the wvw JavaScript bridge.
 -- Author:  KaisarCode
 -- Website: https://kaisarcode.com
 -- License: https://www.gnu.org/licenses/gpl-3.0.html
 
-if arg[1] == "--materialize" then
-    local function read_file(path)
-        local file = assert(io.open(path, "rb"))
-        local content = file:read("*a")
-        file:close()
-        return content
-    end
-    local function write_file(path, content)
-        local file = assert(io.open(path, "wb"))
-        file:write(content)
-        file:close()
-    end
-
-    local function parse_cdef(content)
-        local lines = {}
-        for line in content:gmatch("[^\r\n]+") do
-            table.insert(lines, line)
-        end
-
-        local declarations = {}
-        local current = ""
-        local paren_depth = 0
-        for _, line in ipairs(lines) do
-            local trimmed = line:match("^%s*(.-)%s*$")
-            if trimmed == "" or trimmed:match("^//") or trimmed:match("^#") then
-                goto continue
-            end
-            current = current .. " " .. trimmed
-            for i = 1, #trimmed do
-                local c = trimmed:sub(i, i)
-                if c == "(" then paren_depth = paren_depth + 1 end
-                if c == ")" then paren_depth = paren_depth - 1 end
-            end
-            if paren_depth == 0 and current:match("[;{}]%s*$") then
-                local decl = current:match("^%s*(.-)%s*$")
-                if decl ~= "" then
-                    table.insert(declarations, decl)
-                end
-                current = ""
-            end
-            ::continue::
-        end
-
-        local functions = {}
-        for _, decl in ipairs(declarations) do
-            if decl:match("^enum") or decl:match("^typedef") then
-                goto continue
-            end
-            local name_start, name_end = decl:find("[%a_][%w_]*[%s%*]*%s*%(")
-            if name_start then
-                local name = decl:sub(name_start, name_end - 1)
-                local ret_type = decl:sub(1, name_start - 1):match("^%s*(.-)%s*$")
-                local params_str = decl:match("%((.*)%)")
-                local params = {}
-                if params_str and params_str ~= "void" and params_str ~= "" then
-                    for param in params_str:gmatch("[^,]+") do
-                        param = param:match("^%s*(.-)%s*$")
-                        if param ~= "" then
-                            table.insert(params, "{ type = " .. string.format("%q", param) .. " }")
-                        end
-                    end
-                end
-                table.insert(functions, string.format("        { name = %q, ret_type = %q, params = {%s} }", name, ret_type, table.concat(params, ", ")))
-            end
-            ::continue::
-        end
-        return functions
-    end
-
-    local dist, arch, platform, output = arg[2], arg[3], arg[4], arg[5]
-    local libraries = {}
-    for index = 6, #arg do libraries[#libraries + 1] = arg[index] end
-    table.sort(libraries)
-    local metadata = {}
-    for _, library in ipairs(libraries) do
-        local directory = dist .. "/" .. library .. ".c/" .. arch .. "/" .. platform
-        local cdef_path = directory .. "/lib" .. library .. ".cdef"
-        local shared_lib = directory .. "/lib" .. library .. ".so"
-        if platform == "macos" then
-            shared_lib = directory .. "/lib" .. library .. ".dylib"
-        elseif platform == "windows" then
-            shared_lib = directory .. "/lib" .. library .. ".dll"
-        end
-        local cdef_file = io.open(cdef_path, "rb")
-        if not cdef_file then error("kcapp bridge: missing cdef for " .. library .. ": " .. cdef_path) end
-        local cdef_content = cdef_file:read("*a")
-        cdef_file:close()
-        local f = io.open(shared_lib, "rb")
-        if not f then error("kcapp bridge: missing shared library for " .. library .. ": " .. shared_lib) end
-        f:close()
-        local functions = parse_cdef(cdef_content)
-        if #functions == 0 then error("kcapp bridge: no public API discovered for " .. library) end
-        table.sort(functions)
-        metadata[#metadata + 1] = "    [" .. string.format("%q", library) .. "] = { functions = {\n" .. table.concat(functions, ",\n") .. "\n    } },"
-    end
-    local source = read_file(arg[0])
-    source = source:gsub("^.-\nend\n\n", "", 1)
-    source = source:gsub("        \"@BRIDGE_API_LIBRARIES@\"", table.concat(metadata, "\n"), 1)
-    write_file(output, source)
-    os.exit(0)
-end
-
 local ffi = require("ffi")
 local kcapp = require("kcapp")
 local bridge = {}
-
-ffi.cdef[[void *malloc(size_t size);]]
-
-local handle_registry = {}
-local handle_counter = 0
-
--- Register a pointer as a handle.
--- @param ptr cdata pointer to register
--- @return table with __kcapp_handle or nil
-local function handle_register(ptr)
-    if ptr == nil or ptr == ffi.NULL then
-        return nil
-    end
-    handle_counter = handle_counter + 1
-    local id = handle_counter
-    handle_registry[id] = ptr
-    return {__kcapp_handle = id}
-end
-
--- Unwrap a handle object to its raw pointer.
--- @param obj table with __kcapp_handle or any value
--- @return raw pointer or original value
-local function handle_unwrap(obj)
-    if type(obj) == "table" and obj.__kcapp_handle then
-        local id = obj.__kcapp_handle
-        local ptr = handle_registry[id]
-        if ptr == nil then
-            error("kcapp.bridge: invalid handle " .. id)
-        end
-        return ptr
-    end
-    return obj
-end
 
 local KC_WVW_OK = 0
 local KC_WVW_ERROR = -1
 
 local wvw_lib = nil
 local bridge_states = {}
-
-local bridge_api = {
-    version = 1,
-    libraries = {
-        "@BRIDGE_API_LIBRARIES@"
-    }
-}
 
 local json = {}
 
@@ -343,342 +201,176 @@ function json.decode(str)
     return result
 end
 
--- Encode Lua value to JSON string.
--- @param val any value
--- @return string JSON
-local function json_encode(val)
-    return json.encode(val)
-end
-
--- Decode JSON string to Lua value.
--- @param str string JSON
--- @return any decoded value
-local function json_decode(str)
-    return json.decode(str)
-end
-
--- Load wvw library with fallback.
--- @return table wvw library module
+-- Load the wvw library once for bridge installation.
+-- @return cdata loaded wvw library
 local function load_wvw()
-    if wvw_lib then return wvw_lib end
-    local ok, lib = pcall(kcapp.load, "wvw")
-    if not ok then
-        for _, mod in pairs(package.loaded) do
-            if type(mod) == "table" and mod.kc_wvw_open then
-                return mod
-            end
-        end
-        error("kcapp.bridge: wvw not loaded")
+    if wvw_lib then
+        return wvw_lib
     end
-    wvw_lib = lib
+    wvw_lib = kcapp.load("wvw")
     return wvw_lib
 end
 
--- Convert FFI type string to internal ctype category.
--- @param ffi_type string C type declaration
--- @return string category: void, string, number, pointer, unknown
-local function ffi_type_to_ctype(ffi_type)
-    if ffi_type == "void" then return "void" end
-    local base_type = ffi_type:match("^(.+%*)%s*[%w_]+$") or ffi_type:match("^(.+)%s+[%w_]+$") or ffi_type
-    base_type = base_type:gsub("%s+$", "")
-    if ffi_type:match("char%s*%*%s*[eE][rR][rR]") or ffi_type:match("char%s*%*%s*[bB][uU][fF]") then
-        return "pointer"
-    end
-    if base_type == "const char *" or base_type == "char *" then return "string" end
-    if base_type == "const void *" or base_type == "void *" then return "pointer" end
-    if base_type == "size_t" or base_type == "uint64_t" or base_type == "int" or base_type == "unsigned int" then return "number" end
-    if base_type:match("%*%s*$") then return "pointer" end
-    return "unknown"
-end
-
--- Convert JavaScript arguments to FFI arguments.
--- @param func_info table function metadata
--- @param js_args table array of JS values
--- @return table array of FFI values
-local function convert_js_args_to_ffi(func_info, js_args)
-    local ffi_args = {}
-    local js_index = 1
-    
-    for i, param in ipairs(func_info.params) do
-        local js_val = js_args[js_index]
-        local ctype = ffi_type_to_ctype(param.type)
-        
-        if js_val ~= nil and type(js_val) == "number" and ctype == "pointer" and param.type:match("char%s*%*") then
-            local err_buf = ffi.new("char[256]")
-            table.insert(ffi_args, err_buf)
-        else
-            js_val = js_args[js_index]
-            js_index = js_index + 1
-            
-            if ctype == "string" then
-                if type(js_val) ~= "string" then
-                    error("kcapp.bridge: argument " .. i .. " must be string for " .. func_info.name, 2)
-                end
-                table.insert(ffi_args, js_val)
-            elseif ctype == "number" then
-                if type(js_val) ~= "number" then
-                    error("kcapp.bridge: argument " .. i .. " must be number for " .. func_info.name, 2)
-                end
-                table.insert(ffi_args, js_val)
-            elseif ctype == "pointer" then
-                local unwrapped = handle_unwrap(js_val)
-                if unwrapped ~= js_val then
-                    table.insert(ffi_args, unwrapped)
-                elseif type(js_val) == "string" then
-                    local buf = ffi.new("char[?]", #js_val + 1)
-                    ffi.copy(buf, js_val)
-                    table.insert(ffi_args, buf)
-                elseif type(js_val) == "cdata" then
-                    table.insert(ffi_args, js_val)
-                else
-                    error("kcapp.bridge: argument " .. i .. " must be string, handle, or buffer for " .. func_info.name, 2)
-                end
-            else
-                error("kcapp.bridge: unsupported parameter type " .. param.type .. " for " .. func_info.name, 2)
-            end
-        end
-    end
-    return ffi_args
-end
-
--- Convert FFI result to JavaScript value.
--- @param func_info table function metadata
--- @param result any FFI return value
--- @return any JS-compatible value
-local function convert_ffi_result_to_js(func_info, result)
-    local ret_type = func_info.ret_type
-    
-    local params = func_info.params
-    local is_output_pattern = (ret_type == "int" or ret_type == "size_t" or ret_type == "uint64_t") 
-        and #params == 1 
-        and params[1].type:match("%*%*")
-    
-    if ret_type == "void" then
-        return nil
-    elseif ret_type == "const char *" or ret_type == "char *" then
-        if result == nil then return nil end
-        return ffi.string(result)
-    elseif ret_type == "void *" or ret_type == "const void *" then
-        if result == nil then return nil end
-        return handle_register(result)
-    elseif ret_type == "uint64_t" or ret_type == "size_t" or ret_type == "int" or ret_type == "unsigned int" then
-        if is_output_pattern and type(result) == "cdata" then
-            return handle_register(result)
-        end
-        return tonumber(result)
-    elseif ret_type:match("%*%s*$") then
-        if result == nil then return nil end
-        return handle_register(result)
-    else
-        return tostring(result)
-    end
-end
-
--- Allocate and write JSON result to output pointer.
+-- Store one JSON response in state-owned memory.
+-- @param state table bridge state
 -- @param result_json_ptr cdata output pointer
--- @param value string JSON value
+-- @param value string serialized JSON value
 -- @return boolean success
-local function bridge_result(result_json_ptr, value)
-    local buffer = ffi.C.malloc(#value + 1)
-    if buffer == nil then return false end
+local function bridge_result(state, result_json_ptr, value)
+    local buffer = ffi.new("char[?]", #value + 1)
     ffi.copy(buffer, value, #value)
-    ffi.cast("char *", buffer)[#value] = 0
-    ffi.cast("char **", result_json_ptr)[0] = ffi.cast("char *", buffer)
+    buffer[#value] = 0
+    state.response = buffer
+    result_json_ptr[0] = buffer
     return true
 end
 
--- Dispatch bridge call from WebView.
+-- Return one serialized bridge error.
+-- @param state table bridge state
+-- @param result_json_ptr cdata output pointer
+-- @param code string stable error code
+-- @param message string error message
+-- @return integer KC_WVW_ERROR
+local function bridge_error(state, result_json_ptr, code, message)
+    bridge_result(state, result_json_ptr, json.encode({
+        code = code,
+        message = message
+    }))
+    return KC_WVW_ERROR
+end
+
+-- Dispatch one explicit application bridge method.
 -- @param ctx cdata WebView context
 -- @param method cdata method name
--- @param params_json cdata JSON params
--- @param result_json_ptr cdata output pointer
--- @param userdata cdata user data
+-- @param params_json cdata serialized JSON parameters
+-- @param result_json_ptr cdata output response pointer
+-- @param userdata cdata unused user data
 -- @return integer KC_WVW_OK or KC_WVW_ERROR
 local function bridge_dispatch(ctx, method, params_json, result_json_ptr, userdata)
-    local method_str = "UNKNOWN"
-    if method ~= nil and method ~= ffi.NULL then
-        local ptr = ffi.cast("const char*", method)
-        local bytes = {}
-        for i = 0, 99 do
-            local c = ptr[i]
-            if c == 0 then break end
-            table.insert(bytes, string.char(c))
-        end
-        method_str = table.concat(bytes)
-    end
     local state = bridge_states[tostring(ctx)]
-    if method_str ~= "kcapp_bridge" or not state then
-        bridge_result(result_json_ptr, json_encode({code = "METHOD_NOT_FOUND", message = "Bridge method not available"}))
+    if not state then
         return KC_WVW_ERROR
     end
-    local params_json_str = ffi.string(params_json)
-    local ok, params = pcall(json_decode, params_json_str)
+
+    local method_name = ""
+    if method ~= nil and method ~= ffi.NULL then
+        method_name = ffi.string(method)
+    end
+
+    local handler = state.methods[method_name]
+    if not handler then
+        return bridge_error(
+            state,
+            result_json_ptr,
+            "METHOD_NOT_FOUND",
+            "Bridge method not available: " .. method_name
+        )
+    end
+
+    local params_text = "null"
+    if params_json ~= nil and params_json ~= ffi.NULL then
+        params_text = ffi.string(params_json)
+    end
+
+    local ok, params = pcall(json.decode, params_text)
     if not ok then
-        local err = json_encode({code = "INVALID_PARAMS", message = "Invalid JSON params"})
-        bridge_result(result_json_ptr, err)
-        return KC_WVW_ERROR
+        return bridge_error(
+            state,
+            result_json_ptr,
+            "INVALID_PARAMS",
+            "Invalid JSON parameters"
+        )
     end
 
-    local lib_name = params.lib
-    local fn_name = params.fn
-    local args = params.args or {}
-
-    local lib_info = bridge_api.libraries[lib_name]
-    if not lib_info or not state.libraries[lib_name] then
-        local err = json_encode({code = "LIB_NOT_FOUND", message = "Library not exposed: " .. lib_name})
-        bridge_result(result_json_ptr, err)
-        return KC_WVW_ERROR
+    local call_ok, result = pcall(handler, params)
+    if not call_ok then
+        return bridge_error(
+            state,
+            result_json_ptr,
+            "EXEC_ERROR",
+            tostring(result)
+        )
     end
 
-    local func_info = nil
-    for _, f in ipairs(lib_info.functions) do
-        if f.name == fn_name then
-            func_info = f
-            break
-        end
+    local encode_ok, result_json = pcall(json.encode, result)
+    if not encode_ok then
+        return bridge_error(
+            state,
+            result_json_ptr,
+            "EXEC_ERROR",
+            "Bridge result is not JSON-compatible"
+        )
     end
 
-    if not func_info then
-        local err = json_encode({code = "FUNC_NOT_FOUND", message = "Function not found: " .. fn_name})
-        bridge_result(result_json_ptr, err)
-        return KC_WVW_ERROR
-    end
-
-    local function call_with_output_handling(lib, func_info, args)
-        local ret_type = func_info.ret_type
-        local params = func_info.params
-        
-        local is_output_pattern = (ret_type == "int" or ret_type == "size_t" or ret_type == "uint64_t") 
-            and #params == 1 
-            and params[1].type:match("%*%*")
-        
-        if is_output_pattern then
-            local base_type = params[1].type:gsub("%s*%*%s*[%w_]+$", "")
-            base_type = base_type:gsub("%s+", "")
-            base_type = base_type:gsub("%*+$", "")
-            local out_buf = ffi.new(base_type .. "*[1]")
-            local ret = lib[func_info.name](out_buf)
-            if ret == 0 then
-                return out_buf[0]
-            else
-                return nil, ret
-            end
-        else
-            local ffi_args = convert_js_args_to_ffi(func_info, args)
-            return lib[func_info.name](unpack(ffi_args))
-        end
-    end
-
-    local ret_type = func_info.ret_type
-    local params = func_info.params
-    local is_output_pattern = (ret_type == "int" or ret_type == "size_t" or ret_type == "uint64_t") 
-        and #params == 1 
-        and params[1].type:match("%*%*")  -- contains **
-
-    local lib = kcapp.load(lib_name)
-
-    local ok, result = pcall(call_with_output_handling, lib, func_info, args)
-
-    if not ok then
-        local err = json_encode({code = "EXEC_ERROR", message = "FFI call failed: " .. tostring(result)})
-        bridge_result(result_json_ptr, err)
-        return KC_WVW_ERROR
-    end
-
-    local js_result = convert_ffi_result_to_js(func_info, result)
-    local result_json = json_encode(js_result)
-    if not bridge_result(result_json_ptr, result_json) then return KC_WVW_ERROR end
+    bridge_result(state, result_json_ptr, result_json)
     return KC_WVW_OK
 end
 
-function bridge.install(window, libs, wvw_lib)
-    local wvw = wvw_lib or load_wvw()
-
-    for _, lib_name in ipairs(libs) do
-        if not bridge_api.libraries[lib_name] then
-            error("kcapp.bridge: library not available in bridge: " .. lib_name, 2)
-        end
-    end
-
-    local state = {libraries = {}}
-    local bridge_methods = {"kcapp_bridge"}
-    local bridge_opts = ffi.new("kc_wvw_bridge_options_t")
-    bridge_opts.methods = ffi.new("const char*[?]", #bridge_methods)
-    for i, m in ipairs(bridge_methods) do
-        bridge_opts.methods[i-1] = m
-    end
-    bridge_opts.method_count = #bridge_methods
-    bridge_opts.allow_file = 1
-    bridge_opts.allow_data = 0
-    bridge_opts.allow_localhost = 0
-
-    for _, lib_name in ipairs(libs) do state.libraries[lib_name] = true end
-    state.callback = ffi.cast("kc_wvw_bridge_callback_t", bridge_dispatch)
-    bridge_opts.callback = state.callback
-    bridge_opts.userdata = nil
-
-    local wvw_ctx = window._wvw_ctx
-    if not wvw_ctx then
+-- Install explicit application methods on one WebView instance.
+-- @param window table kcapp window wrapper
+-- @param methods table method-name to Lua-function map
+-- @param loaded_wvw optional loaded wvw library
+-- @return boolean true on success
+function bridge.install(window, methods, loaded_wvw)
+    if type(window) ~= "table" or not window._wvw_ctx then
         error("kcapp.bridge: window missing _wvw_ctx", 2)
     end
-
-    bridge_states[tostring(wvw_ctx)] = state
-
-    local ret = wvw.kc_wvw_enable_bridge(wvw_ctx, bridge_opts)
-    if ret ~= 0 then
-        local err = wvw.kc_wvw_get_error(wvw_ctx)
-        local err_str = (err ~= nil and err ~= ffi.NULL) and ffi.string(err) or "unknown error"
-        error("kcapp.bridge: failed to enable wvw bridge: " .. err_str, 2)
+    if type(methods) ~= "table" then
+        error("kcapp.bridge: methods must be a table", 2)
     end
 
-    local js_setup = {}
-    for _, lib_name in ipairs(libs) do
-        local lib_info = bridge_api.libraries[lib_name]
-        local ns = {}
-        for _, f in ipairs(lib_info.functions) do
-            table.insert(ns, f.name)
+    local names = {}
+    for name, handler in pairs(methods) do
+        if type(name) ~= "string" or name == "" then
+            error("kcapp.bridge: method names must be non-empty strings", 2)
         end
-        js_setup[lib_name] = ns
-    end
-
-    local js_code = bridge.generate_js_facade(js_setup)
-    if wvw.kc_wvw_add_init_script(wvw_ctx, js_code) ~= 0 then
-        bridge_states[tostring(wvw_ctx)] = nil
-        error("kcapp.bridge: failed to install JavaScript facade", 2)
-    end
-end
-
-function bridge.generate_js_facade(lib_map)
-    local parts = {}
-    table.insert(parts, "(function(){")
-    table.insert(parts, "if(!window.NativeBridge){window.NativeBridge={};}")
-    table.insert(parts, "window.NativeBridge._kcappBridgeSend=function(lib,fn,args){")
-    table.insert(parts, "return new Promise(function(resolve,reject){")
-    table.insert(parts, "window.NativeBridge.kcapp_bridge({lib:lib,fn:fn,args:args}).then(resolve).catch(reject);")
-    table.insert(parts, "});};")
-
-    local lib_names = {}
-    for lib_name in pairs(lib_map) do
-        table.insert(lib_names, lib_name)
-    end
-    table.sort(lib_names)
-
-    for _, lib_name in ipairs(lib_names) do
-        local funcs = lib_map[lib_name]
-        local sorted_funcs = {}
-        for _, fn in ipairs(funcs) do
-            table.insert(sorted_funcs, fn)
+        if type(handler) ~= "function" then
+            error("kcapp.bridge: method '" .. name .. "' must be a function", 2)
         end
-        table.sort(sorted_funcs)
-        table.insert(parts, "window.NativeBridge." .. lib_name .. "={};")
-        for _, fn in ipairs(sorted_funcs) do
-            table.insert(parts, "window.NativeBridge." .. lib_name .. "." .. fn .. "=function(...args){")
-            table.insert(parts, "return window.NativeBridge._kcappBridgeSend('" .. lib_name .. "','" .. fn .. "',args);")
-            table.insert(parts, "};")
-        end
+        names[#names + 1] = name
     end
-    table.insert(parts, "})();")
-    return table.concat(parts, "\n")
+    table.sort(names)
+
+    if #names == 0 then
+        error("kcapp.bridge: at least one method is required", 2)
+    end
+
+    local wvw = loaded_wvw or load_wvw()
+    local ctx = window._wvw_ctx
+    local state = {
+        methods = methods,
+        names = names
+    }
+
+    local method_list = ffi.new("const char *[?]", #names)
+    for index, name in ipairs(names) do
+        method_list[index - 1] = name
+    end
+
+    local options = ffi.new("kc_wvw_bridge_options_t")
+    options.methods = method_list
+    options.method_count = #names
+    options.allow_file = 1
+    options.allow_data = 0
+    options.allow_localhost = 0
+
+    state.callback = ffi.cast("kc_wvw_bridge_callback_t", bridge_dispatch)
+    options.callback = state.callback
+    options.userdata = nil
+    bridge_states[tostring(ctx)] = state
+
+    local ret = wvw.kc_wvw_enable_bridge(ctx, options)
+    if ret ~= KC_WVW_OK then
+        bridge_states[tostring(ctx)] = nil
+        state.callback:free()
+        local err = wvw.kc_wvw_get_error(ctx)
+        local message = (err ~= nil and err ~= ffi.NULL)
+            and ffi.string(err)
+            or "unknown error"
+        error("kcapp.bridge: failed to enable wvw bridge: " .. message, 2)
+    end
+
+    return true
 end
 
 return bridge

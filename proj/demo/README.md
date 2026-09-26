@@ -1,52 +1,38 @@
 # Demo
 
-Demo is a graphical application that opens a native WebView and verifies the generated `redp2p` JavaScript bridge.
+Demo is a small graphical application that opens a native WebView and displays
+the build version of the bundled redp2p library.
 
 ## What it does
 
-When started, Demo opens a window showing a simple page titled "redp2p Typed Bridge Test". The page runs a series of `redp2p` API calls through the generated `NativeBridge.redp2p` JavaScript interface and displays the result.
+When started, Demo opens a window and requests the redp2p build version from its
+local backend. On success, the page displays:
 
-The test sequence verifies:
-- String parameter handling (`redp2p_is_valid_id`)
-- Opaque handle creation and return (`redp2p_open`)
-- Handle passing to subsequent calls (`redp2p_set_vip`, `redp2p_set_stream_faults`)
-- Scalar argument handling
-- Version query (`redp2p_version`)
-- Handle release (`redp2p_close`)
-
-On success, the page displays:
-```
+```text
 redp2p version: <timestamp>
 NativeBridge loaded successfully.
 ```
 
-On failure, it displays:
-```
-NativeBridge error: <message>
-```
-
-This demonstrates that the kcapp generated bridge works end-to-end: JavaScript → NativeBridge → Lua bridge → FFI → native redp2p library.
+If the request fails, the page displays the reported error instead.
 
 ## How to use it
 
 Build the application for your platform, then run the generated executable.
 
 On Linux or macOS:
+
 ```sh
 ./demo
 ```
 
 On Windows:
+
 ```sh
 demo.exe
 ```
-
-A native window will open and run the bridge verification automatically.
 
 ## Requirements
 
 - Linux: GTK 3 and WebKitGTK
 - Windows: WebView2 Evergreen Runtime
-- macOS: Cocoa and WKWebView (WebView is built into the OS)
-
-The application is self-contained and includes all required native libraries.
+- macOS: Cocoa and WKWebView

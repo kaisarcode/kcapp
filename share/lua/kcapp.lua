@@ -35,10 +35,10 @@ function kcapp.load(name)
     return lib
 end
 
-function kcapp.bridge(window, libs)
+function kcapp.bridge(window, methods)
     local bridge = require("bridge")
     local wvw = kcapp._loaded_libs and kcapp._loaded_libs.wvw or nil
-    return bridge.install(window, libs, wvw)
+    return bridge.install(window, methods, wvw)
 end
 
 return kcapp

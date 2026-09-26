@@ -152,105 +152,61 @@ local kcapp = require("kcapp")
 
 rather than copying shared kcapp helpers into individual projects.
 
-## kclib JavaScript Bridge
+## JavaScript Bridge
 
-`kcapp` provides an automatic JavaScript bridge for WebView instances via `wvw.c`. When a kcapp backend explicitly enables bridge access for a specific WebView instance, JavaScript in that WebView sees the same kclib API shape used by `kcapk`:
+`kcapp` uses the bridge already provided by `wvw.c` as an application-level
+Lua ↔ JavaScript transport. It does not automatically project a kclib C ABI
+into JavaScript.
 
-```js
-window.NativeBridge.<kclib>.<exact_C_function_name>()
+Lua consumes kclib directly:
+
+```lua
+local kcapp = require("kcapp")
+local redp2p = kcapp.load("redp2p")
+
+local version = tonumber(redp2p.kc_redp2p_version())
 ```
 
-Example:
-```js
-window.NativeBridge.b64.kc_b64_encode(...)
-window.NativeBridge.redp2p.redp2p_version()
-```
-
-### Public Lua API
-
-The bridge is enabled per-WebView through `kcapp.lua`:
+An application explicitly chooses which operations cross into one WebView:
 
 ```lua
 kcapp.bridge(window, {
-    "b64",
-    "redp2p"
+    redp2pVersion = function()
+        return {
+            version = tonumber(redp2p.kc_redp2p_version())
+        }
+    end
 })
 ```
 
-`kcapp.bridge(window, libs)` means:
-* bridge only the listed kclibs into that specific WebView instance;
-* do not expose every project kclib automatically;
-* reject libraries that are not available to the application;
-* preserve any existing non-kclib methods already exposed through `window.NativeBridge`.
+JavaScript receives those application operations through the `NativeBridge`
+surface provided by `wvw.c`:
 
-A kclib being present in `config.json` means it is available to the Lua backend. It does not mean it is automatically exposed to JavaScript.
-
-### Build-time API generation
-
-Bridge metadata is generated automatically during the project build from the distributed `.cdef` files of the kclibs declared in `config.json`. No handwritten JS bindings or per-function metadata are required. No separate generator script is used; generation is an internal step of the project `make`.
-
-The generated `bin/<arch>/<platform>/src/bridge.lua` contains the common bridge runtime logic with embedded kclib API metadata for the declared libraries. It includes everything needed at runtime:
-* common bridge runtime logic (JSON, FFI dispatch, JS facade generation);
-* generated kclib API descriptions (function names, parameter types, return types);
-* allowed library/function information;
-* argument/result conversion logic;
-* per-WebView exposure support.
-
-At runtime, `bridge.lua` is self-contained and does not load a separate metadata module.
-
-Unsupported public signatures fail at build time rather than exposing partial or unsafe behavior. Arbitrary library paths or native symbols are not exposed from JavaScript.
-
-### Runtime bridge behavior
-
-`bridge.lua` uses `wvw.c` only as the transport layer. The bridge is enabled on a specific WebView context/window.
-
-Conceptually:
-```text
-JavaScript
-    ↓
-window.NativeBridge.b64.kc_b64_encode(...)
-    ↓
-internal wvw bridge transport
-    ↓
-bridge.lua
-    ↓
-kcapp.load("b64")
-    ↓
-LuaJIT FFI
-    ↓
-libb64
+```js
+window.NativeBridge.redp2pVersion({}).then(function (result) {
+    console.log(result.version);
+});
 ```
 
-### Per-WebView exposure
+`kcapp.bridge(window, methods)` means:
 
-Bridge exposure is instance-specific:
+* expose only the explicitly named Lua methods on that WebView instance;
+* accept JSON-compatible parameters from JavaScript;
+* return JSON-compatible Lua results to JavaScript;
+* turn Lua callback failures into bridge errors;
+* preserve the WebView origin restrictions and request/response behavior owned
+  by `wvw.c`.
 
-```lua
-kcapp.bridge(main_window, {
-    "b64",
-    "redp2p"
-})
+The application method is responsible for calling whatever kclib operations it
+needs. The bridge does not inspect C declarations, discover native symbols,
+infer output parameters, manufacture pointer handles, or infer ownership.
 
-kcapp.bridge(settings_window, {
-    "b64"
-})
-```
+The project build copies `share/lua/bridge.lua` unchanged into generated
+applications. It does not parse CDEF files or generate bridge metadata,
+bindings, wrappers, or JavaScript facades.
 
-Results in:
-```text
-main_window:
-  NativeBridge.b64.*
-  NativeBridge.redp2p.*
-
-settings_window:
-  NativeBridge.b64.*
-```
-
-A WebView where `kcapp.bridge(...)` was never called must not automatically receive kclib namespaces.
-
-### Existing wvw bridge
-
-The kcapp bridge layer composes with the existing `NativeBridge` from `wvw.c`, not replace it. `wvw.c` is not modified for kclib-specific knowledge.
+A kclib being present in `config.json` means it is available to the Lua
+backend. It does not expose anything to JavaScript automatically.
 
 ## Project initialization
 

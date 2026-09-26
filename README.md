@@ -35,8 +35,8 @@ proj/demo/bin/x86_64/linux/
 │   ├── kcapp.lua
 │   └── bridge.lua
 └── lib/
-    ├── libb64.cdef
-    ├── libb64.so
+    ├── libredp2p.cdef
+    ├── libredp2p.so
     ├── libluajit.so
     ├── libwvw.cdef
     └── libwvw.so
@@ -45,18 +45,52 @@ proj/demo/bin/x86_64/linux/
 From the output directory:
 
 ```sh
-./demo "Hello"
+./demo
 ```
 
-produces:
-
-```text
-SGVsbG8=
-```
+opens the demo WebView and displays the bundled redp2p build version.
 
 Every composed application exposes its own native executable (`demo` on Linux and macOS, `demo.exe` on Windows). The executable runs `src/main.lua` relative to its own application directory, so it can be started from any current working directory. The standalone LuaJIT executable is not distributed as an end-user entry point.
 
 Each generated application places the shared Lua runtime modules in `src/`. The launcher makes that application source tree available through Lua's module search path.
+
+## Lua and JavaScript
+
+Lua loads each declared kclib directly from its distributed CDEF and shared
+library:
+
+```lua
+local kcapp = require("kcapp")
+local redp2p = kcapp.load("redp2p")
+
+print(tonumber(redp2p.kc_redp2p_version()))
+```
+
+When a WebView needs backend operations, the application exposes those
+operations explicitly:
+
+```lua
+kcapp.bridge(window, {
+    redp2pVersion = function()
+        return {
+            version = tonumber(redp2p.kc_redp2p_version())
+        }
+    end
+})
+```
+
+JavaScript calls the exposed operation through the `NativeBridge` supplied by
+`wvw.c`:
+
+```js
+window.NativeBridge.redp2pVersion({}).then(function (result) {
+    console.log(result.version);
+});
+```
+
+Bridge parameters and results are JSON-compatible values. The bridge transports
+application operations; it does not generate bindings from CDEF files or infer
+C pointer, ownership, or output-parameter semantics.
 
 ## Scripts
 
@@ -138,8 +172,8 @@ demo-linux-x86_64.zip
 │   ├── kcapp.lua
 │   └── bridge.lua
 ├── lib/
-│   ├── libb64.cdef
-│   ├── libb64.so
+│   ├── libredp2p.cdef
+│   ├── libredp2p.so
 │   ├── libluajit.so
 │   ├── libwvw.cdef
 │   └── libwvw.so

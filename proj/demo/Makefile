@@ -125,13 +125,10 @@ mkdir -p "$$out/lib" "$$out/src"; \
 rm -f "$$out/luajit" "$$out/luajit.exe" "$$out/main.lua"; \
 rm -rf "$$out/share"; \
 cp -R '$(SRC_DIR)/.' "$$out/src/"; \
-cp '$(SHARE_LUA_DIR)/kcapp.lua' "$$out/src/kcapp.lua"; \
-if [ -f '$(README)' ]; then cp '$(README)' "$$out/README.md"; fi; \
-\
-# GENERATE BRIDGE.LUA WITH EMBEDDED METADATA
-luajit "$(SHARE_LUA_DIR)/bridge.lua" --materialize "$(KCLIB_DIST_DIR)" "$(word 1,$(subst /, ,$@))" "$(word 2,$(subst /, ,$@))" "$(OUT_DIR)/$@/src/bridge.lua" $(KC_LIBS); \
-\
-case "$$platform" in \
+cp '$(SHARE_LUA_DIR)/kcapp.lua' "$out/src/kcapp.lua"; \
+cp '$(SHARE_LUA_DIR)/bridge.lua' "$out/src/bridge.lua"; \
+if [ -f '$(README)' ]; then cp '$(README)' "$out/README.md"; fi; \
+case "$platform" in \
 linux) cp "$$ltarget/$$runtime" "$$out/lib/"; ln -sf "$$runtime" "$$out/lib/libluajit-5.1.so.2"; "$$compiler" -std=c11 -I'$(LUAJIT_INCLUDE_DIR)' -I'$(RUN_INCLUDE_DIR)' '$(RUN_C)' -L"$$ltarget" -Wl,-rpath,'$$ORIGIN/lib' -lluajit -o "$$out/$$executable" ;; \
 windows) [ -f "$$ltarget/libluajit.dll.a" ] || { echo "kcapp: missing LuaJIT linker artifact for $$target" >&2; exit 1; }; cp "$$ltarget/$$runtime" "$$out/"; "$$compiler" -std=c11 -I'$(LUAJIT_INCLUDE_DIR)' -I'$(RUN_INCLUDE_DIR)' '$(RUN_C)' "$$ltarget/libluajit.dll.a" -o "$$out/$$executable" ;; \
 macos) cp "$$ltarget/$$runtime" "$$out/"; "$$compiler" -std=c11 -I'$(LUAJIT_INCLUDE_DIR)' -I'$(RUN_INCLUDE_DIR)' '$(RUN_C)' -L"$$ltarget" -Wl,-rpath,@loader_path -lluajit -o "$$out/$$executable" ;; \
