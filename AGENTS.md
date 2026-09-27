@@ -232,7 +232,7 @@ When developing an application:
 -  do not write FFI or native bindings for ordinary kclib use;
 -  do not edit generated `bin/` output;
 -  do not modify kcapp plumbing unless the task explicitly concerns kcapp
-  itself.
+    itself.
 
 The demo under `proj/demo/` is an example, not the specification. This document
 is the primary guide for ordinary application development.
