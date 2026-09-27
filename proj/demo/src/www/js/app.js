@@ -1,6 +1,6 @@
 /**
  * kcapp demo script.
- * Summary: Verifies one explicit application bridge method.
+ * Summary: Verifies automatic scripting projection for one kclib.
  * Author: KaisarCode
  * Website: https://kaisarcode.com
  * License: GNU General Public License v3.0
@@ -11,13 +11,13 @@
 
     var output = document.getElementById('output');
 
-    window.NativeBridge.redp2pVersion({}).then(function (result) {
-        if (!result || typeof result.version !== 'number' || result.version <= 0) {
+    window.NativeBridge.redp2p.version().then(function (version) {
+        if (typeof version !== 'number' || version <= 0) {
             throw new Error('invalid redp2p version');
         }
 
         output.textContent =
-            'redp2p version: ' + result.version +
+            'redp2p version: ' + version +
             '\nNativeBridge loaded successfully.';
     }).catch(function (error) {
         output.textContent =
