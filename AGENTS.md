@@ -12,7 +12,7 @@ Each composed application exposes its own project-named native executable. The l
 
 `share/lua/kcapp.lua` is the shared Lua runtime module for all applications. Project Lua code must use `require("kcapp")` instead of duplicating shared kclib-loading helpers.
 
-`share/lua/bridge.lua` is the common bridge source/template/infrastructure. It is not the final application bridge and is not copied verbatim. During the project build, it is combined with project-specific kclib API metadata to materialize the generated `bin/<arch>/<platform>/src/bridge.lua`.
+`share/lua/bridge.lua` is the common JavaScript transport runtime. It is copied unchanged into generated applications and discovers the scripting projection through the shared kcapp runtime; project builds do not materialize per-kclib bridge source.
 
 ## Main principle
 
