@@ -1449,6 +1449,23 @@ function kcapp.bridge(window, libraries)
     return require("bridge").install(window, libraries)
 end
 
+-- Open a WebView window and expose selected kclibs to its JavaScript page.
+-- @param options WebView window options.
+-- @param libraries Kclib names to expose through NativeBridge, or nil.
+-- @return Opened WebView window.
+function kcapp.window(options, libraries)
+    local wvw = kcapp.load("wvw")
+    local window, status = wvw.open(options)
+
+    if not window then
+        error("wvw status " .. tostring(status), 2)
+    end
+    if libraries ~= nil then
+        kcapp.bridge(window, libraries)
+    end
+    return window
+end
+
 function kcapp._drain()
     if next(runtime_windows) == nil then return end
 

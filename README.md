@@ -67,33 +67,24 @@ local redp2p = kcapp.load("redp2p")
 print(redp2p.version())
 ```
 
-A visual application loads `wvw` exactly like any other kclib:
+A visual application can open a WebView and expose an explicit list of kclibs
+to JavaScript with one shared wrapper:
 
 ```lua
-local wvw = kcapp.load("wvw")
-
-local window, status = wvw.open({
+local window = kcapp.window({
     url = "src/www/index.html",
     title = "Demo",
     width = 900,
     height = 700
-})
-
-if not window then
-    error("wvw status " .. tostring(status))
-end
+}, {"redp2p"})
 ```
 
 `kcapp` itself does not require or imply a GUI. Headless applications can use
 the same kclib scripting layer without loading `wvw`.
 
-A WebView can expose selected kclibs without writing a Lua adapter for every
-operation. The launcher keeps the native runtime alive after `main.lua`
-returns while registered visual resources remain active:
-
-```lua
-kcapp.bridge(window, {"redp2p"})
-```
+A WebView exposes only the names passed in its second argument; kcapp does not
+infer that selection from `config.json`. The launcher keeps the native runtime
+alive after `main.lua` returns while registered visual resources remain active.
 
 JavaScript receives the projected namespace:
 
