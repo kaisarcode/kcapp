@@ -195,7 +195,7 @@ window.NativeBridge.redp2pVersion({}).then(function (result) {
 * return JSON-compatible Lua results to JavaScript;
 * turn Lua callback failures into bridge errors;
 * preserve the WebView origin restrictions and request/response behavior owned
-  by `wvw.c`.
+    by `wvw.c`.
 
 The application method is responsible for calling whatever kclib operations it
 needs. The bridge does not inspect C declarations, discover native symbols,
