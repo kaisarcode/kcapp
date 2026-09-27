@@ -1,0 +1,59 @@
+/**
+ * KCUI - KCUI Tabs Component
+ * Summary: Accessible tabs with panel integration.
+ *
+ * Author: KaisarCode
+ * Website: https://kaisarcode.com
+ * License: GNU General Public License v3.0
+ * License URL: https://www.gnu.org/licenses/gpl-3.0.txt
+ */
+
+.tabs > [role="tablist"] {
+    z-index: 1;
+    display: flex;
+    position: relative;
+    align-items: flex-end;
+    gap: calc(var(--pad) / 4);
+    margin-bottom: calc(var(--bdw) * -1);
+    min-height: calc(1.15em + var(--pad) * 1.5 + var(--bdw) * 2);
+}
+
+.tabs > [role="tablist"] > [role="tab"] {
+    margin: 0;
+    flex: 0 0 auto;
+    color: var(--tx-hdr);
+    border-color: var(--bd-pnl);
+    background-color: var(--bg-hdr);
+    padding: calc(var(--pad) / 2) var(--pad);
+}
+
+.tabs > [role="tablist"] > [role="tab"]:not([aria-selected="true"]):hover {
+    padding-bottom: var(--pad);
+}
+
+.tabs > [role="tablist"] > [role="tab"][aria-selected="true"] {
+    color: var(--tx-pnl);
+    padding-bottom: var(--pad);
+    border-color: var(--bd-pnl);
+    background-color: var(--bg-pnl);
+    border-bottom-color: var(--bg-pnl);
+}
+
+.tabs > [role="tabpanel"] {
+    margin-bottom: 0;
+}
+
+.tabs > [role="tabpanel"][hidden] {
+    display: none;
+}
+
+/* Transitions */
+@media (prefers-reduced-motion: no-preference) {
+    .tabs > [role="tablist"] > [role="tab"] {
+        transition:
+        padding-bottom 0.12s ease,
+        color 0.12s ease,
+        border-color 0.12s ease,
+        background-color 0.12s ease;
+    }
+}
