@@ -307,7 +307,19 @@ local function callback_free_methods(value)
     return methods
 end
 
-local function transport_out(state, value)
+local function string_to_byte_array(value)
+    local bytes = {}
+    for index = 1, #value do
+        bytes[index] = string.byte(value, index)
+    end
+    return bytes
+end
+
+local function transport_out(state, value, result_kind)
+    if result_kind == "binary" and type(value) == "string" then
+        return {__kcapp_bytes = string_to_byte_array(value)}
+    end
+
     if kcapp._is_object(value) then
         return {
             __kcapp_object = register_object(state, value),
@@ -340,7 +352,9 @@ local function call_operation(state, request)
         if type(method) ~= "function" then
             error("object method not available: " .. tostring(request.fn))
         end
-        return method(object, unpack(args))
+        local value, status = method(object, unpack(args))
+        return value, status,
+            kcapp._result_kind(object._lib, request.fn, object._type)
     end
 
     local module = state.modules[request.lib]
@@ -348,7 +362,8 @@ local function call_operation(state, request)
     if not module or not allowed or not allowed[request.fn] then
         error("operation not available: " .. tostring(request.lib) .. "." .. tostring(request.fn))
     end
-    return module[request.fn](unpack(args))
+    local value, status = module[request.fn](unpack(args))
+    return value, status, kcapp._result_kind(request.lib, request.fn)
 end
 
 local function dispatch(ctx, method, params_json, output, userdata)
@@ -366,7 +381,7 @@ local function dispatch(ctx, method, params_json, output, userdata)
         return failure(state, output, "INVALID_PARAMS", "Invalid bridge request")
     end
 
-    local call_ok, value, status = pcall(call_operation, state, request)
+    local call_ok, value, status, result_kind = pcall(call_operation, state, request)
     if not call_ok then
         return failure(state, output, "EXEC_ERROR", tostring(value))
     end
@@ -380,7 +395,7 @@ local function dispatch(ctx, method, params_json, output, userdata)
         )
     end
 
-    local transport_ok, transported = pcall(transport_out, state, value)
+    local transport_ok, transported = pcall(transport_out, state, value, result_kind)
     if not transport_ok then
         return failure(state, output, "EXEC_ERROR", tostring(transported))
     end
@@ -410,6 +425,7 @@ local function facade(libraries)
         "}",
         "function invoke(req,args){req.args=Array.prototype.map.call(args,encode);return send(req).then(wrap);}",
         "function wrap(v){",
+        "if(v&&v.__kcapp_bytes){return new Uint8Array(v.__kcapp_bytes);}",
         "if(Array.isArray(v)){return v.map(wrap);}",
         "if(v&&v.__kcapp_object){",
         "var o={};Object.defineProperty(o,'__kcappObjectId',{value:v.__kcapp_object});",

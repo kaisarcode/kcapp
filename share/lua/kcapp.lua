@@ -1094,6 +1094,59 @@ invoke = function(lib_name, info, receiver, ...)
     return value
 end
 
+local function script_result_kind(lib_name, info)
+    local outputs = {}
+    local index = 1
+    while index <= #info.parameters do
+        local parameter = info.parameters[index]
+        local pair_kind, pair_parameter = function_pair(info.parameters, index)
+        if is_output(parameter) then
+            outputs[#outputs + 1] = {
+                parameter = parameter,
+                pair_kind = pair_kind
+            }
+            if pair_kind and pair_parameter and is_output(pair_parameter) then
+                index = index + 2
+            else
+                index = index + 1
+            end
+        else
+            index = index + 1
+        end
+    end
+
+    if info.return_pointers == 1 and info.return_base == "void" then
+        for _, output in ipairs(outputs) do
+            if output.parameter.name == "out_size" then
+                return "binary"
+            end
+        end
+    end
+
+    if #outputs == 1 then
+        local output = outputs[1]
+        if output.pair_kind == "size" and output.parameter.base == "void" then
+            return "binary"
+        end
+        if description(lib_name).opaque[output.parameter.base] then
+            return "handle"
+        end
+        if output.pair_kind == "count" then
+            return "array"
+        end
+        return "value"
+    end
+    if #outputs > 1 then return "object" end
+
+    if info.return_pointers == 1 and info.return_base == "char" then
+        return "string"
+    end
+    if description(lib_name).opaque[info.return_base] then
+        return "handle"
+    end
+    return "value"
+end
+
 local function script_signature(lib_name, info)
     local desc = description(lib_name)
     local parameters = {}
@@ -1257,16 +1310,24 @@ function kcapp._object_methods(value)
     return methods
 end
 
-function kcapp._signature(name, operation, type_name)
+local function operation_info(name, operation, type_name)
     local desc = description(name)
-    local info
     if type_name then
-        info = desc.methods[type_name] and desc.methods[type_name][operation]
-    else
-        info = desc.functions[operation]
+        return desc.methods[type_name] and desc.methods[type_name][operation]
     end
+    return desc.functions[operation]
+end
+
+function kcapp._signature(name, operation, type_name)
+    local info = operation_info(name, operation, type_name)
     if not info then return nil end
     return script_signature(name, info)
+end
+
+function kcapp._result_kind(name, operation, type_name)
+    local info = operation_info(name, operation, type_name)
+    if not info then return nil end
+    return script_result_kind(name, info)
 end
 
 return kcapp
