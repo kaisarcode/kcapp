@@ -1,0 +1,82 @@
+/**
+ * KCUI - KCUI Switch Component
+ * Summary: Transform checkboxes and radios buttons into switches.
+ *
+ * Author: KaisarCode
+ * Website: https://kaisarcode.com
+ * License: GNU General Public License v3.0
+ * License URL: https://www.gnu.org/licenses/gpl-3.0.txt
+ */
+
+input[type="radio"].swi,
+input[type="checkbox"].swi {
+    --swi-thumb: 14px;
+    --swi-inset: 3px;
+
+    margin: 0;
+    padding: 0;
+    width: 36px;
+    height: 20px;
+
+    display: inline-block;
+    vertical-align: middle;
+
+    border: 0;
+    border-radius: 10px;
+
+    background-color: var(--bd-sys);
+    background-image: radial-gradient(
+        circle,
+        var(--tx-sys) 0 0.45rem,
+        transparent 0.48rem
+    );
+    background-repeat: no-repeat;
+    background-size: var(--swi-thumb) var(--swi-thumb);
+    background-position: left var(--swi-inset) center;
+
+    cursor: pointer;
+    box-shadow: none;
+    appearance: none;
+    -moz-appearance: none;
+    -webkit-appearance: none;
+}
+
+input[type="radio"].swi:checked,
+input[type="checkbox"].swi:checked {
+    background-color: var(--bg-prm);
+    background-position: right var(--swi-inset) center;
+    box-shadow: none;
+}
+
+input[type="radio"].swi:focus-visible,
+input[type="checkbox"].swi:focus-visible {
+    outline: var(--bdw) solid var(--bg-prm);
+    outline-offset: 2px;
+}
+
+input[type="radio"].swi:disabled,
+input[type="checkbox"].swi:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+label:has(> .swi) {
+    display: flex;
+    gap: var(--pad);
+    align-items: center;
+}
+
+label:has(> .swi) > .swi {
+    order: 1;
+    margin-left: auto;
+}
+
+/* Transitions */
+@media (prefers-reduced-motion: no-preference) {
+    input[type="radio"].swi,
+    input[type="checkbox"].swi {
+        transition:
+        background-color 0.12s ease,
+        background-position 0.12s ease;
+    }
+}
