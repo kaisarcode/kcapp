@@ -1295,6 +1295,26 @@ local function script_result_kind(lib_name, info)
     return "value"
 end
 
+-- Check whether a public struct contains a callback field.
+-- @return True when the struct contains a callback directly or recursively.
+local function struct_contains_callback(desc, type_name, seen)
+    local struct = desc.structs[type_name]
+    if not struct then return false end
+    seen = seen or {}
+    if seen[type_name] then return false end
+    seen[type_name] = true
+    for _, field in ipairs(struct.fields) do
+        if desc.callbacks[field.base] then
+            return true
+        end
+        if desc.structs[field.base] and
+            struct_contains_callback(desc, field.base, seen) then
+            return true
+        end
+    end
+    return false
+end
+
 -- Describe scripting-visible parameters for one operation.
 -- @return Parameter metadata array.
 local function script_signature(lib_name, info)
@@ -1323,7 +1343,12 @@ local function script_signature(lib_name, info)
             elseif parameter.base == "char" and parameter.pointers == 1 then kind = "string"
             elseif pair_kind then kind = "array"
             end
-            parameters[#parameters + 1] = {name = parameter.name, kind = kind}
+            parameters[#parameters + 1] = {
+                name = parameter.name,
+                kind = kind,
+                contains_callback = desc.structs[parameter.base] and
+                    struct_contains_callback(desc, parameter.base) or false
+            }
             index = index + (pair_kind and pair_parameter and pair_parameter.pointers == 0 and 2 or 1)
         end
     end

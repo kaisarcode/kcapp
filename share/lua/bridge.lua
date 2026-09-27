@@ -435,7 +435,9 @@ end
 -- @return True when a callback parameter exists.
 local function has_callback(signature)
     for _, parameter in ipairs(signature or {}) do
-        if parameter.kind == "callback" then return true end
+        if parameter.kind == "callback" or parameter.contains_callback then
+            return true
+        end
     end
     return false
 end
