@@ -1,84 +1,25 @@
 # AGENTS.md
 
-## Kcapp
+## Purpose
 
-This repository is the public development repository for `kcapp`.
+Use this repository to develop desktop applications with kcapp.
 
-Read the workspace-level `AGENTS.md` first. These rules add kcapp-specific conventions.
+For normal application work, stay inside `proj/<name>/`. Do not inspect or modify kcapp runtime, launcher, generator, bridge, or build plumbing unless the task explicitly asks to change kcapp itself.
 
-`kcapp` is a generator/composer for LuaJIT-based desktop applications. It composes already-built artifacts from kclib and LuaJIT together with the application's Lua source.
+## Creating an application
 
-Each composed application exposes its own project-named native executable. The launcher resolves its real executable location, changes to its application root, and runs `src/main.lua` from there. Invoking it through a symlink does not change that root.
+Always create a new application from the repository root with:
 
-`share/lua/kcapp.lua` is the shared Lua runtime module for all applications. Project Lua code must use `require("kcapp")` instead of duplicating shared kclib-loading helpers.
-
-`share/lua/bridge.lua` is the common JavaScript transport runtime. It is copied unchanged into generated applications and discovers the scripting projection through the shared kcapp runtime; project builds do not materialize per-kclib bridge source.
-
-## Main principle
-
-Do not compile again what already exists. `kcapp` composes existing artifacts:
-
-```text
-kclib/dist/...         -> copy/select
-luajit-precompiler/... -> copy/select
-project Lua source     -> copy
+```sh
+./scripts/init.sh <name>
 ```
 
-Dependency artifacts are selected and copied into runnable application directories. LuaJIT is linked as a prebuilt shared library; its standalone executable is not an end-user runtime component. No network access belongs in the composition process.
+Do not create a kcapp project manually.
 
-## Scope
-
-`kcapp` targets desktop applications: Linux, Windows, and macOS.
-
-## Repository layout
-
-The Lua source is the product. Projects live directly under `proj/`.
+The command creates:
 
 ```text
-kcapp/
-├── AGENTS.md
-├── README.md
-├── scripts/
-│   ├── init.sh
-│   ├── build.sh
-│   └── dist.sh
-├── share/
-│   ├── init/
-│   │   └── Makefile
-│   ├── lua/
-│   │   └── kcapp.lua
-│   └── run/
-│       ├── run.c
-│       └── run.h
-├── proj/
-│   └── demo/
-│       ├── README.md
-│       ├── Makefile
-│       ├── config.json
-│       ├── src/
-│       │   └── main.lua
-│       └── bin/
-│           └── <arch>/<platform>/
-└── dist/
-    └── <project>/
-        ├── manifest.json
-        └── <project>-<platform>-<arch>.zip
-```
-
-`bin/` is project-local generated output for runnable target directories.
-
-Generated applications place the shared Lua runtime modules in `src/`. The launcher prepends `src` module paths to Lua's `package.path`, while retaining the existing path entries.
-
-`dist/` contains distributable application packages and one manifest per project.
-
-Each project carries its own self-contained `Makefile`, and composition runs from inside the project directory with `make`, `make <arch>/<platform>`, or `make all`.
-
-## Base application structure
-
-Every kcapp project under `proj/` starts from the same minimal source structure:
-
-```text
-proj/<project>/
+proj/<name>/
 ├── Makefile
 ├── README.md
 ├── config.json
@@ -86,296 +27,202 @@ proj/<project>/
     └── main.lua
 ```
 
-This is the canonical base project structure created by:
+`src/main.lua` is the application entry point.
 
-```sh
-./scripts/init.sh <project>
+Develop application code, Lua modules, HTML, CSS, JavaScript, templates, configuration, and other app-owned resources under `src/`.
+
+Do not edit generated `bin/` output.
+
+## Kclib dependencies
+
+Kclibs provide native capabilities to the application.
+
+Choose libraries from:
+
+https://github.com/kaisarcode/kclib/blob/master/INDEX.md
+
+For the exact behavior and public API of a library, read its project documentation under:
+
+```text
+https://github.com/kaisarcode/kclib/tree/master/proj/NAME.c
 ```
 
-`src/main.lua` is the mandatory application entry point.
-
-The complete `src/` directory belongs to the application and may contain additional Lua modules, assets, configuration, templates, or other project-specific resources. Its internal structure must be preserved in generated builds and distributions.
-
-`config.json` declares project configuration. New projects start with no kclib dependencies:
+Declare every kclib used by the application in `config.json`:
 
 ```json
 {
-  "kclib": []
+  "kclib": ["http", "redp2p"]
 }
 ```
 
-`README.md` is end-user documentation for the application.
+Do not rely on undeclared kclibs.
 
-`Makefile` owns project build behavior and is created from the authoritative shared project template:
+## Using kclibs from Lua
 
-```text
-share/init/Makefile
-```
+Application Lua uses the shared kcapp scripting layer.
 
-Do not maintain a second independent initial project Makefile implementation in `scripts/init.sh`.
-
-Generated directories such as `bin/` are not part of the initial project skeleton and are created only by the build.
-
-A generated kcapp has the conceptual runtime layout:
-
-```text
-bin/<arch>/<platform>/
-├── <project>
-├── README.md
-├── src/
-│   ├── main.lua
-│   ├── kcapp.lua
-│   └── bridge.lua
-└── lib/
-    └── ...
-```
-
-On Windows the executable is `<project>.exe`, and runtime DLL placement may differ where required by the native loader.
-
-The application executable always treats its own real executable directory as the application root and executes:
-
-```text
-src/main.lua
-```
-
-Shared kcapp Lua functionality comes from:
-
-```text
-share/lua/kcapp.lua
-```
-
-Project source must use:
+Start with:
 
 ```lua
 local kcapp = require("kcapp")
 ```
 
-rather than copying shared kcapp helpers into individual projects.
+Load a kclib with:
 
-## Scripting bindings
+```lua
+local http = kcapp.load("http")
+```
 
-`kcapp` is the scripting adaptation layer above the general-purpose kclib ABI.
-Kclib remains unaware of Lua, JavaScript, kcapp, or WebView consumers.
+Then call its scripting API directly:
 
-Application Lua must consume natural scripting values and operations through
-`kcapp`. Native ABI plumbing belongs only in the shared runtime.
+```lua
+local result = http.some_operation(...)
+```
 
-Project source under `proj/*/src/` must not adapt kclib or operating-system
-ABIs directly. In particular, application code must not need:
+Use normal Lua values.
 
-* `ffi.new()`, `ffi.cast()`, `ffi.string()`, or `ffi.NULL`;
-* C out-pointer arrays such as `int[1]` or `T *[1]`;
-* public C struct construction such as `kc_wvw_options_t`;
-* direct `kc_*` symbol calls;
-* `tonumber()` merely to convert FFI scalar results;
-* libc, WinAPI, or platform-specific sleep/path plumbing.
+Do not write FFI bindings or call C symbols directly from application code.
 
-Those details may exist inside `share/lua/` when required to translate the
-stable kclib ABI into scripting values, but they must be centralized and
-reusable rather than repeated by applications.
+Do not use `ffi.new()`, `ffi.cast()`, `ffi.string()`, `ffi.NULL`, C structs, output pointers, explicit native counts, allocation functions, or `kc_*` symbols in project Lua.
 
-The intended Lua surface is capability-oriented:
+The kcapp runtime translates the public kclib API into natural scripting values.
+
+Typical projections are:
+
+```text
+C public struct        -> Lua table
+array + count          -> Lua array
+buffer + size          -> Lua string
+opaque capability      -> Lua object
+out parameter          -> returned value
+*_free() ownership     -> handled internally
+kc_name_operation()    -> name.operation()
+```
+
+Opaque capabilities are used as Lua objects when the library exposes them:
+
+```lua
+local mdp = kcapp.load("mdp")
+
+local document, status = mdp.open("# Hello")
+if not document then
+    error("mdp status " .. status)
+end
+
+print(document:html())
+document:close()
+```
+
+## Visual applications
+
+A kcapp may be headless. A WebView is optional.
+
+For a visual application, open the window from Lua:
 
 ```lua
 local kcapp = require("kcapp")
-local redp2p = kcapp.load("redp2p")
 
-local version = redp2p.version()
-```
-
-A visual project loads `wvw` through the same kclib surface:
-
-```lua
-local wvw = kcapp.load("wvw")
-
-local window, status = wvw.open({
+kcapp.window({
     url = "src/www/index.html",
-    title = "Demo",
+    title = "My App",
     width = 900,
     height = 700
+}, {
+    "http",
+    "redp2p"
 })
 ```
 
-Do not make `wvw` an implicit requirement of `kcapp`. A kcapp may be
-headless and consume kclibs without any WebView.
+The second argument is the explicit list of kclibs exposed to that WebView.
 
-The JavaScript bridge projects selected kclib scripting APIs rather than asking
-the application to write one Lua adapter per operation. Runtime waiting or
-event-loop plumbing must remain internal to the shared runtime/launcher and
-must not appear in project Lua:
+Declaring a kclib in `config.json` makes it available to the application build. It is exposed to frontend JavaScript only when included in the window list.
 
-```lua
-kcapp.bridge(window, {"redp2p"})
+## Using kclibs from JavaScript
+
+Inside a kcapp WebView, selected kclibs are available under:
+
+```js
+window.NativeBridge.<kclib>
 ```
 
-JavaScript receives the corresponding natural namespace:
+Call operations asynchronously:
 
 ```js
 const version = await window.NativeBridge.redp2p.version();
 ```
 
-The shared binding layer may mechanically translate scalar representation,
-strings, public value structs, explicit arrays/counts, buffers/sizes, opaque
-capability handles, callbacks/userdata, ownership, and platform transport. It
-must not infer application semantics from incidental parameter names or invent
-capabilities absent from the public kclib API.
+or:
 
-`share/lua/bridge.lua` owns WebView transport and JavaScript projection.
-`share/lua/kcapp.lua` owns Lua-side kclib loading and ABI-to-scripting
-translation. JavaScript transport must use the Lua scripting projection rather
-than maintain a second independent C ABI adapter.
+```js
+const result = await window.NativeBridge.http.someOperation(...);
+```
 
-## Project initialization
+Use normal JavaScript values.
 
-`scripts/init.sh <project>` creates a new kcapp project using the canonical base application structure.
-
-It creates only:
+Typical projections are:
 
 ```text
-proj/<project>/
-├── Makefile
-├── README.md
-├── config.json
-└── src/
-    └── main.lua
+C public struct        -> JavaScript object
+array + count          -> JavaScript array
+byte buffer            -> Uint8Array
+opaque capability      -> JavaScript object
+out parameter          -> resolved return value
+*_free() ownership     -> handled internally
+kc_name_operation()    -> NativeBridge.name.operation()
 ```
 
-It does not:
+Do not create manual JavaScript-to-C adapters.
 
-* create `bin/`;
-* create or modify `dist/`;
-* run `make`;
-* add kclib dependencies;
-* copy shared runtime source into the project;
-* modify an existing project.
+## Building
 
-If `proj/<project>` already exists in any form, initialization must stop with a clear diagnostic and leave the existing path untouched.
+From the application directory:
 
-Do not merge, repair, overwrite, regenerate, or complete existing projects through `init.sh`.
-
-New projects start with:
-
-```json
-{
-  "kclib": []
-}
+```sh
+cd proj/<name>
+make
 ```
 
-The generated `src/main.lua` may use `require("kcapp")`, but shared runtime files remain authoritative under `share/` and are copied only into generated build output.
+Build a specific target with:
 
-## Build scripts
+```sh
+make <arch>/<platform>
+```
 
-`scripts/build.sh <project>` enters `proj/<project>/` and runs:
+Build every available desktop target with:
 
 ```sh
 make all
 ```
 
-The build script delegates build behavior to the project's own `Makefile`. Do not duplicate project build logic in `scripts/build.sh`.
+From the repository root:
 
-## Distribution
-
-`scripts/dist.sh` packages existing project build outputs. It does not build projects.
-
-Each existing target under:
-
-```text
-proj/<project>/bin/<arch>/<platform>/
+```sh
+./scripts/build.sh <name>
 ```
 
-is packaged as:
+This enters the project and runs `make all`.
 
-```text
-dist/<project>/<project>-<platform>-<arch>.zip
-```
+## Project README
 
-The contents of `<platform>/` are stored directly at the root of the ZIP archive.
+Each application must include a `README.md` written for the end user.
 
-Each package contains:
+Document what the application does and how to use it.
 
-```text
-SHA256SUM.txt
-```
+Do not fill an application README with kcapp internals, LuaJIT details, native ABI details, generated output structure, or builder implementation.
 
-`SHA256SUM.txt` stores one SHA-256 digest representing the installable build contents. The checksum marker itself is excluded when calculating that digest.
+## Application rules
 
-The same build digest is published for the package in:
+When developing an application:
 
-```text
-dist/<project>/manifest.json
-```
+- create new projects with `./scripts/init.sh <name>`;
+- work inside `proj/<name>/`;
+- put application source under `src/`;
+- declare every kclib in `config.json`;
+- use `kcapp.load("name")` from Lua;
+- use `window.NativeBridge.name` from WebView JavaScript;
+- expose only the JavaScript kclibs needed by each window;
+- do not write FFI or native bindings for ordinary kclib use;
+- do not edit generated `bin/` output;
+- do not modify kcapp plumbing unless the task explicitly concerns kcapp itself.
 
-This digest is the installed-build identity used by external systems to determine whether an installed project differs from the published build.
-
-Shared Lua runtime files participate in this identity because they are included in every generated application directory.
-
-Do not derive this published build identity from ZIP metadata or from the ZIP file itself. Repacking identical installable contents must not change the build identity.
-
-Each project `manifest.json` also contains:
-
-* `updated_at`: UTC ISO-8601 generation time.
-* `timestamp`: Unix generation timestamp.
-* `packages`: published packages for that project and their build digests.
-
-Packaging and distribution metadata generation belong in `scripts/dist.sh`. Do not move project compilation into the distribution step.
-
-## Project READMEs
-
-Every project under `proj/` must include a `README.md`.
-
-Project READMEs are end-user documentation. Unlike kclib documentation, they are written for people who want to use the application, not for developers who want to build or integrate it.
-
-Write project documentation in clear, non-technical language.
-
-A project README should explain, when applicable:
-
-* what the application does;
-* who it is useful for;
-* how to start and use it;
-* the main user-facing features;
-* any files, folders, permissions, or system requirements the user must know about;
-* platform-specific usage differences that affect the user;
-* where the application stores or reads user-visible data;
-* limitations or important behavior a user should know before using it.
-
-Do not document internal implementation details unless they directly affect normal use.
-
-Avoid developer-oriented material such as build instructions, compiler details, internal dependency layout, LuaJIT internals, kclib integration, source architecture, or generated artifact structure in a project README.
-
-Repository-level developer and distribution documentation belongs in the root `README.md`, `AGENTS.md`, project `Makefile`, or other development documentation.
-
-Keep each project README specific to the actual application. Do not use a generic template mechanically when the application needs different user guidance.
-
-## Authoritative plan
-
-`PLAN.md` is the project-local specification for the implementation. It takes precedence over completion history or prior notes for the current milestone. Implement only the requested milestone; do not get ahead of the task.
-
-## Composition rules
-
-* Resolve `<arch>/<platform>` from the target.
-* Resolve kclib dependencies as `$(KCLIB_DIST_DIR)/NAME.c/<arch>/<platform>/`.
-* Select `libNAME.h` and the platform shared library (`.so`, `.dll`, `.dylib`).
-* Generate `libNAME.cdef` from the distributed public header during kcapp composition, only for declared dependencies and the target being built.
-* Compile the shared launcher against the target's prebuilt LuaJIT shared library and copy only the required LuaJIT runtime library.
-* Do not copy the standalone `luajit` or `luajit.exe` executable into application output.
-* If a target directory or any required artifact is missing, fail clearly.
-* Preserve the complete `src/` tree, including nested modules, assets, and configuration.
-* Do not transform project Lua source. Shared kcapp runtime bindings may adapt the distributed CDEF mechanically into scripting-level values.
-* Copy the shared Lua runtime modules to generated application `src/` without copying them into project source trees.
-* The launcher must resolve the real executable location before deriving the application root, including when invoked through a symlink.
-* The launcher must expose `src` through Lua's `package.path`.
-* The launcher must execute `src/main.lua` relative to the application root.
-
-## Structure and dependencies
-
-Use existing project mechanisms before introducing new ones. Keep project behavior local and easy to inspect.
-
-Shared implementation belongs under `share/` only when it represents behavior genuinely common to kcapps.
-
-Do not duplicate shared launcher code, shared Lua runtime code, or the initial project Makefile implementation across individual projects.
-
-## Tests and documentation
-
-Use the repository's existing validation paths. Update documentation when public or operational behavior changes. Keep the root README consistent with the repository layout and actual behavior.
-
-Keep each project README focused on the end-user experience of that application.
+The demo under `proj/demo/` is an example, not the specification. This document is the primary guide for ordinary application development.
