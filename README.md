@@ -242,11 +242,6 @@ At minimum it declares the kclibs used by the application:
 
 The list normally contains only the libraries used by the application.
 
-## Project README
-
-Applications created by kcapp include their own `README.md` alongside the
-project configuration and source tree.
-
 ## Example
 
 `proj/demo/` contains a complete example showing Lua, a WebView frontend, and
