@@ -694,7 +694,11 @@ end
 
 local function callback_arguments(lib_name, callback, native_args)
     local desc = description(lib_name)
-    local values = {}
+    local values = {n = 0}
+    local function push(value)
+        values.n = values.n + 1
+        values[values.n] = value
+    end
     local index = 1
     while index <= #callback.parameters do
         local parameter = callback.parameters[index]
@@ -706,25 +710,25 @@ local function callback_arguments(lib_name, callback, native_args)
         elseif pair_kind and parameter.base == "void" then
             local count = scalar_from_c(native_args[index + 1])
             local value = cdata_null(native) and nil or ffi.string(native, count)
-            values[#values + 1] = value
+            push(value)
             if not parameter.const and not cdata_null(native) then
                 free_pointer(lib_name, native)
             end
             index = index + 2
         elseif parameter.pointers == 1 and desc.structs[parameter.base] then
-            values[#values + 1] = cdata_null(native) and nil or struct_to_lua(lib_name, parameter.base, native[0])
+            push(cdata_null(native) and nil or struct_to_lua(lib_name, parameter.base, native[0]))
             index = index + 1
         elseif parameter.pointers == 1 and desc.opaque[parameter.base] then
-            values[#values + 1] = cdata_null(native) and nil or wrap_object(lib_name, parameter.base, native, false)
+            push(cdata_null(native) and nil or wrap_object(lib_name, parameter.base, native, false))
             index = index + 1
         elseif parameter.base == "char" and parameter.pointers == 1 then
-            values[#values + 1] = cdata_null(native) and nil or ffi.string(native)
+            push(cdata_null(native) and nil or ffi.string(native))
             index = index + 1
         elseif parameter.pointers == 0 and scalar_types[parameter.base] then
-            values[#values + 1] = scalar_from_c(native)
+            push(scalar_from_c(native))
             index = index + 1
         else
-            values[#values + 1] = native
+            push(native)
             index = index + 1
         end
     end
@@ -747,7 +751,7 @@ make_callback = function(lib_name, type_name, handler, keep)
     c_callback = ffi.cast(type_name, function(...)
         local native_args = {...}
         local values = callback_arguments(lib_name, callback, native_args)
-        local ok, result = pcall(handler, unpack(values))
+        local ok, result = pcall(handler, unpack(values, 1, values.n))
         if not ok then
             io.stderr:write("kcapp callback error: " .. tostring(result) .. "\n")
             if base_type(callback.return_type) ~= "void" then return 0 end
@@ -994,7 +998,7 @@ local function plan_call(lib_name, info, receiver, script_args)
         end
     end
 
-    if script_index <= #script_args then
+    if script_index <= script_args.n then
         error("kcapp: too many arguments for " .. lib_name .. "." .. info.name, 3)
     end
 
@@ -1044,7 +1048,7 @@ local function extract_outputs(lib_name, outputs)
 end
 
 invoke = function(lib_name, info, receiver, ...)
-    local script_args = {...}
+    local script_args = {n = select("#", ...), ...}
     local native_args, keep, outputs = plan_call(lib_name, info, receiver, script_args)
     local lib = raw_library(lib_name)
     local result = lib[info.symbol](unpack(native_args))

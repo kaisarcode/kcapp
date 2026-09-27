@@ -12,7 +12,7 @@ local KC_WVW_OK = 0
 local KC_WVW_ERROR = -1
 local states = {}
 
-local json = {}
+local json = {null = {}}
 
 local function utf8_char(codepoint)
     if codepoint <= 0x7f then return string.char(codepoint) end
@@ -44,6 +44,7 @@ local function encode_string(value)
 end
 
 function json.encode(value)
+    if value == json.null then return "null" end
     local kind = type(value)
     if kind == "nil" then return "null" end
     if kind == "boolean" then return value and "true" or "false" end
@@ -215,7 +216,7 @@ function json.decode(source)
         end
         if source:sub(position, position + 3) == "null" then
             position = position + 4
-            return nil
+            return json.null
         end
         return parse_number()
     end
@@ -260,6 +261,7 @@ local function byte_array_to_string(values)
 end
 
 local function transport_in(state, value)
+    if value == json.null then return nil end
     if type(value) ~= "table" then return value end
 
     if value.__kcapp_object then
@@ -338,9 +340,10 @@ local function transport_out(state, value, result_kind)
 end
 
 local function call_operation(state, request)
-    local args = {}
-    for index, value in ipairs(request.args or {}) do
-        args[index] = transport_in(state, value)
+    local source_args = request.args or {}
+    local args = {n = #source_args}
+    for index = 1, args.n do
+        args[index] = transport_in(state, source_args[index])
     end
 
     if request.object then
@@ -352,7 +355,7 @@ local function call_operation(state, request)
         if type(method) ~= "function" then
             error("object method not available: " .. tostring(request.fn))
         end
-        local value, status = method(object, unpack(args))
+        local value, status = method(object, unpack(args, 1, args.n))
         return value, status,
             kcapp._result_kind(object._lib, request.fn, object._type)
     end
@@ -362,7 +365,7 @@ local function call_operation(state, request)
     if not module or not allowed or not allowed[request.fn] then
         error("operation not available: " .. tostring(request.lib) .. "." .. tostring(request.fn))
     end
-    local value, status = module[request.fn](unpack(args))
+    local value, status = module[request.fn](unpack(args, 1, args.n))
     return value, status, kcapp._result_kind(request.lib, request.fn)
 end
 
