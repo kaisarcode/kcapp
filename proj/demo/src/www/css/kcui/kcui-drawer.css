@@ -1,0 +1,98 @@
+/**
+ * KCUI - KCUI Drawer Component
+ * Summary: Collapsible panel.
+ *
+ * Author: KaisarCode
+ * Website: https://kaisarcode.com
+ * License: GNU General Public License v3.0
+ * License URL: https://www.gnu.org/licenses/gpl-3.0.txt
+ */
+
+.drw {
+    --drw-top: 0;
+    --drw-right: auto;
+    --drw-bottom: 0;
+    --drw-left: 0;
+
+    --drw-width: 20rem;
+    --drw-height: 100%;
+
+    --drw-closed-width: var(--drw-width);
+    --drw-overflow: visible;
+
+    --drw-position: fixed;
+
+    --drw-open: translate(0);
+    --drw-closed: translateX(-100%);
+
+    --drw-open-clip: inset(0);
+    --drw-closed-clip: inset(0);
+
+    top: var(--drw-top);
+    right: var(--drw-right);
+    bottom: var(--drw-bottom);
+    left: var(--drw-left);
+
+    width: var(--drw-closed-width);
+    height: var(--drw-height);
+    overflow: var(--drw-overflow);
+
+    max-width: 100%;
+    max-height: 100%;
+    min-width: 0;
+    min-height: 0;
+
+    margin: 0;
+    z-index: 999;
+    flex: 0 0 auto;
+    position: var(--drw-position);
+
+    transform: var(--drw-closed);
+    clip-path: var(--drw-closed-clip);
+}
+
+.drw[open] {
+    width: var(--drw-width);
+    transform: var(--drw-open);
+    clip-path: var(--drw-open-clip);
+}
+
+.drw > .hdr,
+.drw > .bdy,
+.drw > .ftr {
+    min-width: var(--drw-width);
+}
+
+/* Transitions */
+@media (prefers-reduced-motion: no-preference) {
+    .drw {
+        transition:
+        width 0.18s ease,
+        transform 0.18s ease,
+        clip-path 0.18s ease;
+    }
+}
+
+/* Examples */
+
+/**
+ * This side drawer pushes
+ * the sibling column as it expands
+ * */
+/*
+#sidebar-relative {
+    --drw-position: relative;
+    --drw-closed-width: 3rem;
+    --drw-closed: none;
+    --drw-overflow: hidden;
+}
+
+@media (max-width: 768px) {
+    #sidebar-relative {
+        --drw-position: fixed;
+        --drw-closed-width: var(--drw-width);
+        --drw-closed: translateX(-100%);
+        --drw-overflow: visible;
+    }
+}
+*/
