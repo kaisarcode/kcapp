@@ -1,8 +1,10 @@
 # kcapp
 
-`kcapp` is the desktop application environment for the KaisarCode ecosystem, built around Lua and optional WebView frontends.
+`kcapp` is the desktop application environment for the KaisarCode ecosystem,
+built around Lua and optional WebView frontends.
 
-Applications live under `proj/`, use Lua as their main runtime, and can consume native capabilities from kclib without writing native bindings.
+Applications live under `proj/`, use Lua as their main runtime, and can consume
+native capabilities from kclib without writing native bindings.
 
 ## Create an application
 
@@ -25,7 +27,8 @@ proj/myapp/
 
 `src/main.lua` is the application entry point.
 
-Put the rest of the application under `src/`: Lua modules, HTML, CSS, JavaScript, templates, configuration, images, and other resources.
+Put the rest of the application under `src/`: Lua modules, HTML, CSS,
+JavaScript, templates, configuration, images, and other resources.
 
 ## Hello world
 
@@ -48,7 +51,8 @@ Then run the generated application from its target directory.
 
 ## Using kclibs
 
-Kclibs provide reusable native capabilities such as HTTP handling, networking, templates, Markdown, storage, WebView, tray integration, local AI, and more.
+Kclibs provide reusable native capabilities such as HTTP handling, networking,
+templates, Markdown, storage, WebView, tray integration, local AI, and more.
 
 Browse the catalog here:
 
@@ -78,7 +82,9 @@ print(document:html())
 document:close()
 ```
 
-The Lua API uses normal scripting values and objects. Application code does not need to deal with native pointers, C structs, allocation functions, or FFI details.
+The Lua API uses normal scripting values and objects. Application code does not
+need to deal with native pointers, C structs, allocation functions, or FFI
+details.
 
 For the exact operations offered by a library, read its README under:
 
@@ -88,7 +94,8 @@ kclib/proj/NAME.c/README.md
 
 ## Visual applications
 
-A kcapp does not need a GUI, but a visual application can open a WebView from Lua.
+A kcapp does not need a GUI, but a visual application can open a WebView from
+Lua.
 
 Example:
 
@@ -155,7 +162,8 @@ const bytes = await window.NativeBridge.http.request({
 });
 ```
 
-Native capabilities that represent persistent objects are exposed as JavaScript objects with methods.
+Native capabilities that represent persistent objects are exposed as JavaScript
+objects with methods.
 
 ## Build commands
 
@@ -213,7 +221,8 @@ Packages are written under:
 dist/<project>/
 ```
 
-The distribution step packages existing builds; it does not build the application for you.
+The distribution step packages existing builds; it does not build the
+application for you.
 
 ## Project configuration
 
@@ -237,12 +246,15 @@ Add only the libraries the application actually needs.
 
 Each application has its own `README.md`.
 
-Write it for the people using the application. Describe what the app does, how to start it, important features, user-visible files or permissions, and relevant limitations.
+Write it for the people using the application. Describe what the app does, how
+to start it, important features, user-visible files or permissions, and relevant
+limitations.
 
 Development details about kcapp itself do not belong in an application README.
 
 ## Example
 
-`proj/demo/` contains a complete example showing Lua, a WebView frontend, and kclib calls from JavaScript.
+`proj/demo/` contains a complete example showing Lua, a WebView frontend, and
+kclib calls from JavaScript.
 
 Use it as a reference when you need a working example.
