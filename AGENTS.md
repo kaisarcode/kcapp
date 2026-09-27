@@ -152,61 +152,71 @@ local kcapp = require("kcapp")
 
 rather than copying shared kcapp helpers into individual projects.
 
-## JavaScript Bridge
+## Scripting bindings
 
-`kcapp` uses the bridge already provided by `wvw.c` as an application-level
-Lua ↔ JavaScript transport. It does not automatically project a kclib C ABI
-into JavaScript.
+`kcapp` is the scripting adaptation layer above the general-purpose kclib ABI.
+Kclib remains unaware of Lua, JavaScript, kcapp, or WebView consumers.
 
-Lua consumes kclib directly:
+Application Lua must consume natural scripting values and operations through
+`kcapp`. Native ABI plumbing belongs only in the shared runtime.
+
+Project source under `proj/*/src/` must not adapt kclib or operating-system
+ABIs directly. In particular, application code must not need:
+
+* `ffi.new()`, `ffi.cast()`, `ffi.string()`, or `ffi.NULL`;
+* C out-pointer arrays such as `int[1]` or `T *[1]`;
+* public C struct construction such as `kc_wvw_options_t`;
+* direct `kc_*` symbol calls;
+* `tonumber()` merely to convert FFI scalar results;
+* libc, WinAPI, or platform-specific sleep/path plumbing.
+
+Those details may exist inside `share/lua/` when required to translate the
+stable kclib ABI into scripting values, but they must be centralized and
+reusable rather than repeated by applications.
+
+The intended Lua surface is capability-oriented:
 
 ```lua
 local kcapp = require("kcapp")
 local redp2p = kcapp.load("redp2p")
 
-local version = tonumber(redp2p.kc_redp2p_version())
+local version = redp2p.version()
 ```
 
-An application explicitly chooses which operations cross into one WebView:
+Window setup is also scripting-level:
 
 ```lua
-kcapp.bridge(window, {
-    redp2pVersion = function()
-        return {
-            version = tonumber(redp2p.kc_redp2p_version())
-        }
-    end
+local window = kcapp.open({
+    url = "src/www/index.html",
+    title = "Demo",
+    width = 900,
+    height = 700
 })
 ```
 
-JavaScript receives those application operations through the `NativeBridge`
-surface provided by `wvw.c`:
+The JavaScript bridge projects selected kclib scripting APIs rather than asking
+the application to write one Lua adapter per operation:
 
-```js
-window.NativeBridge.redp2pVersion({}).then(function (result) {
-    console.log(result.version);
-});
+```lua
+kcapp.bridge(window, {"redp2p"})
 ```
 
-`kcapp.bridge(window, methods)` means:
+JavaScript receives the corresponding natural namespace:
 
-* expose only the explicitly named Lua methods on that WebView instance;
-* accept JSON-compatible parameters from JavaScript;
-* return JSON-compatible Lua results to JavaScript;
-* turn Lua callback failures into bridge errors;
-* preserve the WebView origin restrictions and request/response behavior owned
-    by `wvw.c`.
+```js
+const version = await window.NativeBridge.redp2p.version();
+```
 
-The application method is responsible for calling whatever kclib operations it
-needs. The bridge does not inspect C declarations, discover native symbols,
-infer output parameters, manufacture pointer handles, or infer ownership.
+The shared binding layer may mechanically translate scalar representation,
+strings, public value structs, explicit arrays/counts, buffers/sizes, opaque
+capability handles, callbacks/userdata, ownership, and platform transport. It
+must not infer application semantics from incidental parameter names or invent
+capabilities absent from the public kclib API.
 
-The project build copies `share/lua/bridge.lua` unchanged into generated
-applications. It does not parse CDEF files or generate bridge metadata,
-bindings, wrappers, or JavaScript facades.
-
-A kclib being present in `config.json` means it is available to the Lua
-backend. It does not expose anything to JavaScript automatically.
+`share/lua/bridge.lua` owns WebView transport and JavaScript projection.
+`share/lua/kcapp.lua` owns Lua-side kclib loading and ABI-to-scripting
+translation. JavaScript transport must use the Lua scripting projection rather
+than maintain a second independent C ABI adapter.
 
 ## Project initialization
 
@@ -342,7 +352,7 @@ Keep each project README specific to the actual application. Do not use a generi
 * Do not copy the standalone `luajit` or `luajit.exe` executable into application output.
 * If a target directory or any required artifact is missing, fail clearly.
 * Preserve the complete `src/` tree, including nested modules, assets, and configuration.
-* Do not transform Lua code, generate bindings, or generate wrappers.
+* Do not transform project Lua source. Shared kcapp runtime bindings may adapt the distributed CDEF mechanically into scripting-level values.
 * Copy the shared Lua runtime modules to generated application `src/` without copying them into project source trees.
 * The launcher must resolve the real executable location before deriving the application root, including when invoked through a symlink.
 * The launcher must expose `src` through Lua's `package.path`.

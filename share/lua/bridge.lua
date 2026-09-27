@@ -342,4 +342,23 @@ function bridge.install(window, libraries)
     return true
 end
 
+-- Release bridge-owned callback state for one window.
+-- @param window table kcapp window object
+-- @return nil
+function bridge.release(window)
+    if type(window) ~= "table" or not window._wvw_ctx then
+        return
+    end
+    local key = tostring(window._wvw_ctx)
+    local state = states[key]
+    if not state then
+        return
+    end
+    states[key] = nil
+    if state.callback then
+        state.callback:free()
+        state.callback = nil
+    end
+end
+
 return bridge

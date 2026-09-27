@@ -56,41 +56,47 @@ Each generated application places the shared Lua runtime modules in `src/`. The 
 
 ## Lua and JavaScript
 
-Lua loads each declared kclib directly from its distributed CDEF and shared
-library:
+Applications use kclibs through the scripting surface provided by `kcapp`.
+The CDEF and shared library remain the native source, but FFI representation is
+kept inside the shared runtime.
 
 ```lua
 local kcapp = require("kcapp")
 local redp2p = kcapp.load("redp2p")
 
-print(tonumber(redp2p.kc_redp2p_version()))
+print(redp2p.version())
 ```
 
-When a WebView needs backend operations, the application exposes those
-operations explicitly:
+Desktop window setup also stays at the scripting level:
 
 ```lua
-kcapp.bridge(window, {
-    redp2pVersion = function()
-        return {
-            version = tonumber(redp2p.kc_redp2p_version())
-        }
-    end
+local window = kcapp.open({
+    url = "src/www/index.html",
+    title = "Demo",
+    width = 900,
+    height = 700
 })
 ```
 
-JavaScript calls the exposed operation through the `NativeBridge` supplied by
-`wvw.c`:
+A WebView can expose selected kclibs without writing a Lua adapter for every
+operation:
+
+```lua
+kcapp.bridge(window, {"redp2p"})
+kcapp.run(window)
+```
+
+JavaScript receives the projected namespace:
 
 ```js
-window.NativeBridge.redp2pVersion({}).then(function (result) {
-    console.log(result.version);
+window.NativeBridge.redp2p.version().then(function (version) {
+    console.log(version);
 });
 ```
 
-Bridge parameters and results are JSON-compatible values. The bridge transports
-application operations; it does not generate bindings from CDEF files or infer
-C pointer, ownership, or output-parameter semantics.
+Application source does not need to construct C structs, out pointers, C
+strings, FFI scalar conversions, or platform-specific sleep/path calls. Those
+mechanics belong to the shared kcapp binding runtime.
 
 ## Scripts
 

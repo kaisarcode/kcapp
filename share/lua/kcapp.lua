@@ -10,6 +10,7 @@ local kcapp = {}
 local raw_libraries = {}
 local modules = {}
 local descriptions = {}
+local platform_cdef_ready = false
 
 local scalar_types = {
     ["int"] = true,
@@ -201,19 +202,26 @@ local function module_for(name)
     return module
 end
 
+local function ensure_platform_cdef()
+    if platform_cdef_ready then
+        return
+    end
+    if ffi.os == "Windows" then
+        ffi.cdef[[char *_getcwd(char *buffer, int maxlen);
+                  void Sleep(unsigned long milliseconds);]]
+    else
+        ffi.cdef[[char *getcwd(char *buffer, size_t size);
+                  int usleep(unsigned int usec);]]
+    end
+    platform_cdef_ready = true
+end
+
 local function file_url(path)
     if path:match("^%a[%w+.-]*://") then
         return path
     end
 
-    ffi.cdef[[
-#if defined(_WIN32)
-        char *_getcwd(char *buffer, int maxlen);
-#else
-        char *getcwd(char *buffer, size_t size);
-#endif
-    ]]
-
+    ensure_platform_cdef()
     local buffer = ffi.new("char[4096]")
     local cwd
     if ffi.os == "Windows" then
@@ -309,14 +317,7 @@ function kcapp.run(window)
         error("kcapp.run: invalid window", 2)
     end
 
-    ffi.cdef[[
-#if defined(_WIN32)
-        void Sleep(unsigned long milliseconds);
-#else
-        int usleep(unsigned int usec);
-#endif
-    ]]
-
+    ensure_platform_cdef()
     local wvw = raw_library("wvw")
     while wvw.kc_wvw_is_visible(window._wvw_ctx) == 1 do
         if ffi.os == "Windows" then
@@ -324,6 +325,10 @@ function kcapp.run(window)
         else
             ffi.C.usleep(50000)
         end
+    end
+    local bridge = package.loaded.bridge
+    if bridge and bridge.release then
+        bridge.release(window)
     end
     wvw.kc_wvw_close(window._wvw_ctx)
     window._wvw_ctx = nil
