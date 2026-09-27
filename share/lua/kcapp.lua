@@ -40,21 +40,29 @@ local scalar_types = {
     ["double"] = true
 }
 
+-- Normalize surrounding and repeated whitespace in a string.
+-- @return Normalized string.
 local function trim(value)
     return (value or ""):gsub("^%s+", ""):gsub("%s+$", ""):gsub("%s+", " ")
 end
 
+-- Normalize spacing in one C type declaration.
+-- @return Canonical type string.
 local function canonical_type(value)
     value = trim(value)
     value = value:gsub("%s*%*%s*", " * ")
     return trim(value)
 end
 
+-- Count pointer indirections in one C type declaration.
+-- @return Pointer indirection count.
 local function pointer_level(value)
     local _, count = canonical_type(value):gsub("%*", "")
     return count
 end
 
+-- Extract the unqualified base name from one C type.
+-- @return Base type name.
 local function base_type(value)
     value = canonical_type(value)
     value = value:gsub("%f[%a]const%f[%A]", "")
@@ -63,14 +71,20 @@ local function base_type(value)
     return trim(value)
 end
 
+-- Check whether one C type carries a const qualifier.
+-- @return True when the type is const.
 local function is_const_type(value)
     return canonical_type(value):match("%f[%a]const%f[%A]") ~= nil
 end
 
+-- Check whether a string begins with a prefix.
+-- @return True when the prefix matches.
 local function starts_with(value, prefix)
     return value:sub(1, #prefix) == prefix
 end
 
+-- Split text by a separator outside nested delimiters.
+-- @return Array of top-level parts.
 local function split_top_level(source, separator)
     local parts = {}
     local start = 1
@@ -99,6 +113,8 @@ local function split_top_level(source, separator)
     return parts
 end
 
+-- Split CDEF source into top-level statements.
+-- @return Array of statements.
 local function statements(source)
     local result = {}
     local current = {}
@@ -127,6 +143,8 @@ local function statements(source)
     return result
 end
 
+-- Parse one C declaration into structural metadata.
+-- @return Declaration metadata or nil.
 local function parse_decl(source)
     source = trim(source)
     local array = source:match("%[([^%]]+)%]%s*$")
@@ -149,6 +167,8 @@ local function parse_decl(source)
     }
 end
 
+-- Match pointer and size or count parameter names.
+-- @return True when the names form a pair.
 local function pair_name(pointer_name, scalar_name, suffix)
     if scalar_name == pointer_name .. suffix then
         return true
@@ -162,10 +182,14 @@ local function pair_name(pointer_name, scalar_name, suffix)
     return false
 end
 
+-- Check whether a parameter represents scripted output.
+-- @return True when the parameter is output.
 local function is_output(parameter)
     return parameter.name == "out" or starts_with(parameter.name, "out_")
 end
 
+-- Derive the scripting name for one output parameter.
+-- @return Output field name.
 local function output_name(parameter)
     if parameter.name == "out" then
         return "value"
@@ -173,12 +197,16 @@ local function output_name(parameter)
     return parameter.name:gsub("^out_", "")
 end
 
+-- Return the shared-library extension for the host platform.
+-- @return Platform library extension.
 local function library_extension()
     if ffi.os == "Windows" then return ".dll" end
     if ffi.os == "OSX" then return ".dylib" end
     return ".so"
 end
 
+-- Read one distributed kclib CDEF definition.
+-- @return CDEF source text.
 local function read_definition(name)
     local path = "./lib/lib" .. name .. ".cdef"
     local file, message = io.open(path, "rb")
@@ -190,6 +218,8 @@ local function read_definition(name)
     return content
 end
 
+-- Build structural scripting metadata from a kclib CDEF.
+-- @return Library description table.
 local function parse_description(name, source)
     local description = {
         name = name,
@@ -316,6 +346,8 @@ local function parse_description(name, source)
     return description
 end
 
+-- Load and cache one native kclib library.
+-- @return Loaded FFI library handle.
 local function raw_library(name)
     if raw_libraries[name] then
         return raw_libraries[name]
@@ -328,21 +360,29 @@ local function raw_library(name)
     return lib
 end
 
+-- Return cached structural metadata for one kclib.
+-- @return Library description table.
 local function description(name)
     raw_library(name)
     return descriptions[name]
 end
 
+-- Check whether a native pointer value is null.
+-- @return True when the value is null.
 local function cdata_null(value)
     return value == nil or value == ffi.NULL
 end
 
+-- Append all array values from one table into another.
+-- @return void
 local function append_all(destination, source)
     for _, value in ipairs(source or {}) do
         destination[#destination + 1] = value
     end
 end
 
+-- Create a stable cache key from a native pointer.
+-- @return Pointer key or nil.
 local function pointer_key(value)
     if cdata_null(value) then return nil end
     return tostring(ffi.cast("void *", value))
@@ -350,10 +390,14 @@ end
 
 local object_mt = {}
 
+-- Return projected methods available on one native object.
+-- @return Method metadata table.
 local function object_methods(object)
     return description(object._lib).methods[object._type] or {}
 end
 
+-- Check whether a projected native object is still usable.
+-- @return True when the object is valid.
 local function object_valid(object)
     if type(object) ~= "table" or not object._kcapp_object then
         return false
@@ -366,6 +410,8 @@ end
 
 local invoke
 
+-- Wrap one opaque native pointer as a scripting object.
+-- @return Projected object or nil.
 local function wrap_object(lib_name, type_name, ptr, owned)
     if cdata_null(ptr) then
         return nil
@@ -392,6 +438,8 @@ local function wrap_object(lib_name, type_name, ptr, owned)
     return object
 end
 
+-- Invalidate one projected object after native lifetime ends.
+-- @return void
 local function invalidate_object(object)
     if type(object) ~= "table" then return end
     runtime_windows[object] = nil
@@ -422,6 +470,8 @@ object_mt.__tostring = function(object)
     return string.format("%s.%s", object._lib or "kcapp", object._type or "object")
 end
 
+-- Detect an adjacent size or count pair in struct fields.
+-- @return Pair kind and paired field, or nil.
 local function struct_pair(fields, index)
     local field = fields[index]
     local next_field = fields[index + 1]
@@ -436,6 +486,8 @@ local function struct_pair(fields, index)
     return nil
 end
 
+-- Detect an adjacent size or count pair in parameters.
+-- @return Pair kind and paired parameter, or nil.
 local function function_pair(parameters, index)
     local parameter = parameters[index]
     local next_parameter = parameters[index + 1]
@@ -464,6 +516,8 @@ local function function_pair(parameters, index)
     return nil
 end
 
+-- Convert scripting booleans to native scalar representation.
+-- @return Native scalar value.
 local function scalar_value(value)
     if type(value) == "boolean" then
         return value and 1 or 0
@@ -471,6 +525,8 @@ local function scalar_value(value)
     return value
 end
 
+-- Convert an FFI scalar into a Lua number.
+-- @return Lua number.
 local function scalar_from_c(value)
     if type(value) == "number" then return value end
     return tonumber(value)
@@ -481,6 +537,8 @@ local struct_to_lua
 local make_callback
 local free_pointer
 
+-- Allocate and retain storage for one scalar pointer.
+-- @return Native scalar pointer.
 local function allocate_scalar_pointer(type_name, value, keep)
     local cell = ffi.new(type_name .. "[1]")
     cell[0] = scalar_value(value)
@@ -488,6 +546,8 @@ local function allocate_scalar_pointer(type_name, value, keep)
     return cell
 end
 
+-- Allocate and retain one byte buffer from a Lua string.
+-- @return Buffer pointer and byte count.
 local function allocate_bytes(value, keep)
     if value == nil then return nil, 0 end
     if type(value) ~= "string" then
@@ -504,6 +564,8 @@ local function allocate_bytes(value, keep)
     return buffer, #value
 end
 
+-- Allocate and retain an array of scalar values.
+-- @return Array pointer and element count.
 local function allocate_scalar_array(type_name, values, keep)
     if type(values) ~= "table" then
         error("kcapp: expected array table", 3)
@@ -517,6 +579,8 @@ local function allocate_scalar_array(type_name, values, keep)
     return array, #values
 end
 
+-- Allocate and retain an array of C strings.
+-- @return Array pointer and element count.
 local function allocate_string_array(values, keep)
     if type(values) ~= "table" then
         error("kcapp: expected string array table", 3)
@@ -533,6 +597,8 @@ local function allocate_string_array(values, keep)
     return array, #values
 end
 
+-- Allocate and populate an array of public structs.
+-- @return Array pointer and element count.
 local function allocate_struct_array(lib_name, type_name, values, keep)
     if type(values) ~= "table" then
         error("kcapp: expected array table", 3)
@@ -546,6 +612,8 @@ local function allocate_struct_array(lib_name, type_name, values, keep)
     return array, #values
 end
 
+-- Populate one public native struct from a Lua table.
+-- @return void
 fill_struct = function(lib_name, type_name, target, value, keep)
     if type(value) ~= "table" then
         error("kcapp: expected table for " .. type_name, 3)
@@ -627,6 +695,8 @@ fill_struct = function(lib_name, type_name, target, value, keep)
     end
 end
 
+-- Allocate and populate one public struct pointer.
+-- @return Native struct pointer or nil.
 local function marshal_struct(lib_name, type_name, value, keep)
     if value == nil then return nil end
     local pointer = ffi.new(type_name .. "[1]")
@@ -635,6 +705,8 @@ local function marshal_struct(lib_name, type_name, value, keep)
     return pointer
 end
 
+-- Convert one public native struct into a Lua table.
+-- @return Lua table.
 struct_to_lua = function(lib_name, type_name, value)
     local desc = description(lib_name)
     local struct = desc.structs[type_name]
@@ -694,6 +766,8 @@ struct_to_lua = function(lib_name, type_name, value)
     return result
 end
 
+-- Convert native callback arguments into scripting values.
+-- @return Arguments table and output metadata.
 local function callback_arguments(lib_name, callback, native_args)
     local desc = description(lib_name)
     local values = {n = 0}
@@ -744,6 +818,8 @@ local function callback_arguments(lib_name, callback, native_args)
     return values, outputs
 end
 
+-- Write one scripting callback result into native output storage.
+-- @return void
 local function assign_callback_output(lib_name, output, value)
     local parameter = output.parameter
     local native = output.native
@@ -770,6 +846,8 @@ local function assign_callback_output(lib_name, output, value)
     error("kcapp: unsupported callback output " .. parameter.name, 3)
 end
 
+-- Create and retain one native callback wrapper.
+-- @return Native callback or nil.
 make_callback = function(lib_name, type_name, handler, keep)
     if handler == nil then return nil end
     if type(handler) ~= "function" then
@@ -815,6 +893,8 @@ make_callback = function(lib_name, type_name, handler, keep)
     return c_callback
 end
 
+-- Convert one scripting argument into native representation.
+-- @return Native argument value.
 local function marshal_input(lib_name, parameter, value, keep)
     local desc = description(lib_name)
     if desc.callbacks[parameter.base] and parameter.pointers == 0 then
@@ -855,6 +935,8 @@ local function marshal_input(lib_name, parameter, value, keep)
     return value
 end
 
+-- Allocate native storage for one output parameter.
+-- @return Native output storage.
 local function allocate_output(lib_name, parameter, keep)
     local desc = description(lib_name)
     local type_name
@@ -874,6 +956,8 @@ local function allocate_output(lib_name, parameter, keep)
     return cell
 end
 
+-- Release memory through the kclib public free operation.
+-- @return void
 free_pointer = function(lib_name, pointer)
     if cdata_null(pointer) then return end
     local desc = description(lib_name)
@@ -883,6 +967,8 @@ free_pointer = function(lib_name, pointer)
     end
 end
 
+-- Convert one native pointer output into a scripting value.
+-- @return Converted scripting value.
 local function convert_pointer_output(lib_name, parameter, pointer, count, owned)
     local desc = description(lib_name)
     if cdata_null(pointer) then
@@ -946,6 +1032,8 @@ local function convert_pointer_output(lib_name, parameter, pointer, count, owned
     return pointer
 end
 
+-- Convert a direct native return value into scripting form.
+-- @return Converted scripting value.
 local function direct_result(lib_name, info, result, output_cells)
     local desc = description(lib_name)
     if info.return_pointers == 0 then
@@ -983,6 +1071,8 @@ local function direct_result(lib_name, info, result, output_cells)
     return result
 end
 
+-- Build native arguments and outputs for one scripted call.
+-- @return Native arguments, retained values, and outputs.
 local function plan_call(lib_name, info, receiver, script_args)
     local desc = description(lib_name)
     local native_args = {}
@@ -1053,6 +1143,8 @@ local function plan_call(lib_name, info, receiver, script_args)
     return native_args, keep, output_cells
 end
 
+-- Convert native output parameters into natural Lua results.
+-- @return Converted output value.
 local function extract_outputs(lib_name, outputs)
     local values = {}
     local names = {}
@@ -1095,6 +1187,8 @@ local function extract_outputs(lib_name, outputs)
     return result
 end
 
+-- Invoke one projected kclib operation through FFI.
+-- @return Projected operation result.
 invoke = function(lib_name, info, receiver, ...)
     local script_args = {n = select("#", ...), ...}
     local native_args, keep, outputs = plan_call(lib_name, info, receiver, script_args)
@@ -1146,6 +1240,8 @@ invoke = function(lib_name, info, receiver, ...)
     return value
 end
 
+-- Describe the transport kind of one projected result.
+-- @return Result kind name.
 local function script_result_kind(lib_name, info)
     local outputs = {}
     local index = 1
@@ -1199,6 +1295,8 @@ local function script_result_kind(lib_name, info)
     return "value"
 end
 
+-- Describe scripting-visible parameters for one operation.
+-- @return Parameter metadata array.
 local function script_signature(lib_name, info)
     local desc = description(lib_name)
     local parameters = {}
@@ -1232,18 +1330,26 @@ local function script_signature(lib_name, info)
     return parameters
 end
 
+-- Declare private platform functions needed by the runtime.
+-- @return void
 local function ensure_platform_cdef()
     if platform_cdef_ready then return end
     if ffi.os == "Windows" then
-        ffi.cdef[[char *_getcwd(char *buffer, int maxlen);
-                  void Sleep(unsigned long milliseconds);]]
+        ffi.cdef[[
+        char *_getcwd(char *buffer, int maxlen);
+        void Sleep(unsigned long milliseconds);
+        ]]
     else
-        ffi.cdef[[char *getcwd(char *buffer, size_t size);
-                  int usleep(unsigned int usec);]]
+        ffi.cdef[[
+        char *getcwd(char *buffer, size_t size);
+        int usleep(unsigned int usec);
+        ]]
     end
     platform_cdef_ready = true
 end
 
+-- Resolve one local path into a file URL when needed.
+-- @return Resolved URL string.
 local function file_url(path)
     if path:match("^%a[%w+.-]*://") then return path end
     ensure_platform_cdef()
@@ -1267,7 +1373,8 @@ local function file_url(path)
     return "file://" .. root .. "/" .. path
 end
 
-
+-- Create the natural Lua module surface for one kclib.
+-- @return Projected module table.
 local function module_for(name)
     local desc = description(name)
     local module = {}
@@ -1374,6 +1481,8 @@ function kcapp._object_methods(value)
     return methods
 end
 
+-- Resolve structural metadata for one projected operation.
+-- @return Operation metadata or nil.
 local function operation_info(name, operation, type_name)
     local desc = description(name)
     if type_name then

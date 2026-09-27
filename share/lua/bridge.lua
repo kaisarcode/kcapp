@@ -14,6 +14,8 @@ local states = {}
 
 local json = {null = {}}
 
+-- Encode one Unicode codepoint as UTF-8.
+-- @return UTF-8 string.
 local function utf8_char(codepoint)
     if codepoint <= 0x7f then return string.char(codepoint) end
     if codepoint <= 0x7ff then
@@ -29,6 +31,8 @@ local function utf8_char(codepoint)
     )
 end
 
+-- Encode one Lua string as a JSON string literal.
+-- @return JSON string literal.
 local function encode_string(value)
     return '"' .. value:gsub('[%z\1-\31\\"]', function(char)
         if char == '\\' then return '\\\\' end
@@ -227,6 +231,8 @@ function json.decode(source)
     return value
 end
 
+-- Serialize and retain one successful bridge result.
+-- @return void
 local function result(state, output, value)
     local encoded = json.encode(value)
     local buffer = ffi.new("char[?]", #encoded + 1)
@@ -236,6 +242,8 @@ local function result(state, output, value)
     output[0] = ffi.cast("const char *", buffer)
 end
 
+-- Serialize one bridge failure result.
+-- @return Bridge error status.
 local function failure(state, output, code, message, status)
     local value = {
         code = code,
@@ -246,6 +254,8 @@ local function failure(state, output, code, message, status)
     return KC_WVW_ERROR
 end
 
+-- Convert a numeric byte array into a Lua string.
+-- @return Binary Lua string.
 local function byte_array_to_string(values)
     local parts = {}
     local chunk = {}
@@ -260,6 +270,8 @@ local function byte_array_to_string(values)
     return table.concat(parts)
 end
 
+-- Convert a bridge JSON value into a Lua scripting value.
+-- @return Converted input value.
 local function transport_in(state, value)
     if value == json.null then return nil end
     if type(value) ~= "table" then return value end
@@ -283,6 +295,8 @@ local function transport_in(state, value)
     return result_value
 end
 
+-- Register one projected object for bridge transport.
+-- @return Object identifier.
 local function register_object(state, object)
     local existing = state.object_ids[object]
     if existing then return existing end
@@ -293,6 +307,8 @@ local function register_object(state, object)
     return id
 end
 
+-- List transportable methods that require no callbacks.
+-- @return Method name array.
 local function callback_free_methods(value)
     local methods = {}
     for _, name in ipairs(kcapp._object_methods(value)) do
@@ -309,6 +325,8 @@ local function callback_free_methods(value)
     return methods
 end
 
+-- Convert a Lua string into a numeric byte array.
+-- @return Byte array.
 local function string_to_byte_array(value)
     local bytes = {}
     for index = 1, #value do
@@ -317,6 +335,8 @@ local function string_to_byte_array(value)
     return bytes
 end
 
+-- Convert one Lua scripting result into bridge transport form.
+-- @return Transport value.
 local function transport_out(state, value, result_kind)
     if result_kind == "binary" and type(value) == "string" then
         return {__kcapp_bytes = string_to_byte_array(value)}
@@ -339,6 +359,8 @@ local function transport_out(state, value, result_kind)
     return result_value
 end
 
+-- Invoke one projected operation from a bridge request.
+-- @return Value, status, and result kind.
 local function call_operation(state, request)
     local source_args = request.args or {}
     local args = {n = #source_args}
@@ -369,6 +391,8 @@ local function call_operation(state, request)
     return value, status, kcapp._result_kind(request.lib, request.fn)
 end
 
+-- Dispatch one WebView bridge request into the scripting layer.
+-- @return WebView bridge status.
 local function dispatch(ctx, method, params_json, output, userdata)
     local state = states[tostring(ctx)]
     if not state then return KC_WVW_ERROR end
@@ -407,6 +431,8 @@ local function dispatch(ctx, method, params_json, output, userdata)
     return KC_WVW_OK
 end
 
+-- Check whether a scripting signature accepts a callback.
+-- @return True when a callback parameter exists.
 local function has_callback(signature)
     for _, parameter in ipairs(signature or {}) do
         if parameter.kind == "callback" then return true end
@@ -414,6 +440,8 @@ local function has_callback(signature)
     return false
 end
 
+-- Generate the JavaScript facade for selected kclibs.
+-- @return JavaScript source string.
 local function facade(libraries)
     local lines = {
         "(function(){",
