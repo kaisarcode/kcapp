@@ -95,8 +95,47 @@ window.NativeBridge.redp2p.version().then(function (version) {
 ```
 
 Application source does not need to construct C structs, out pointers, C
-strings, FFI scalar conversions, or platform-specific sleep/path calls. Those
-mechanics belong to the shared kcapp binding runtime.
+strings, FFI scalar conversions, explicit buffer sizes/counts, or
+platform-specific sleep/path calls. Those mechanics belong to the shared
+kcapp binding runtime.
+
+Opaque kclib capabilities become Lua objects. For example:
+
+```lua
+local mdp = kcapp.load("mdp")
+
+local document, status = mdp.open("# Hello")
+if not document then
+    error("mdp status " .. status)
+end
+
+print(document:html())
+document:close()
+```
+
+Public structs become Lua tables, explicit arrays/counts become Lua arrays, and
+buffer/size pairs become Lua strings. Memory returned through a kclib
+`*_free()` contract is copied to the scripting value and released internally;
+`free()` itself is not part of the scripting surface.
+
+Callbacks are ordinary Lua functions. Callback userdata and C callback output
+pointers stay inside the binding:
+
+```lua
+local netl = kcapp.load("netl")
+
+local listener, status = netl.open({
+    host = "127.0.0.1",
+    port = 0,
+    protocol = netl.TCP
+}, function(input)
+    input.peer:respond("pong")
+end)
+
+if not listener then
+    error("netl status " .. status)
+end
+```
 
 ## Scripts
 
