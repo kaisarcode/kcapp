@@ -18,12 +18,7 @@
 
 *::-webkit-scrollbar-thumb {
   background: var(--bd-sys);
-  border: calc(var(--bdw) * 2) solid var(--bg-sys);
   border-radius: var(--rad);
-}
-
-*::-webkit-scrollbar-thumb:hover {
-  background: var(--bg-prm);
 }
 
 #output {
