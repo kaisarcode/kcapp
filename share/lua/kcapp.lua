@@ -561,7 +561,7 @@ fill_struct = function(lib_name, type_name, target, value, keep)
         local item = value[field.name]
 
         if pair_kind then
-            if field.base == "void" then
+            if field.base == "void" or (field.base == "char" and field.pointers == 1) then
                 local pointer, count = allocate_bytes(item, keep)
                 target[field.name] = pointer
                 target[count_field.name] = count
@@ -649,7 +649,7 @@ struct_to_lua = function(lib_name, type_name, value)
         if pair_kind then
             local count = scalar_from_c(value[count_field.name])
             local pointer = value[field.name]
-            if field.base == "void" then
+            if field.base == "void" or (field.base == "char" and field.pointers == 1) then
                 result[field.name] = cdata_null(pointer) and nil or ffi.string(pointer, count)
             elseif desc.structs[field.base] then
                 local items = {}
