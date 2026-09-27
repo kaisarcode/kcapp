@@ -57,8 +57,9 @@ Each generated application places the shared Lua runtime modules in `src/`. The 
 ## Lua and JavaScript
 
 Applications use kclibs through the scripting surface provided by `kcapp`.
-The CDEF and shared library remain the native source, but FFI representation is
-kept inside the shared runtime.
+The public kclib header and shared library remain the native source. During
+composition, kcapp generates the LuaJIT CDEF needed for each declared kclib and
+target, while FFI representation stays inside the shared runtime.
 
 ```lua
 local kcapp = require("kcapp")
@@ -264,6 +265,7 @@ kcapp/
 ├── scripts/
 │   ├── init.sh
 │   ├── build.sh
+│   ├── cdef.sh
 │   └── dist.sh
 ├── share/
 │   ├── init/
@@ -325,11 +327,11 @@ make KCLIB_DIST_DIR=/abs/path/kclib/dist x86_64/linux
 
 For dependency `NAME` and target `<arch>/<platform>`, `kcapp` selects `libNAME.cdef` and the platform shared library:
 
-| platform | library         |
-| :------- | :-------------- |
-| linux    | `libNAME.so`    |
-| windows  | `libNAME.dll`   |
-| macos    | `libNAME.dylib` |
+| platform | kclib inputs                    |
+| :------- | :------------------------------ |
+| linux    | `libNAME.h`, `libNAME.so`       |
+| windows  | `libNAME.h`, `libNAME.dll`      |
+| macos    | `libNAME.h`, `libNAME.dylib`    |
 
 `kcapp` links the project-named native launcher with the prebuilt LuaJIT shared library and copies its required runtime library. It does not distribute `luajit` or `luajit.exe`. If the target directory or any required artifact is missing, composition fails with a clear error.
 
