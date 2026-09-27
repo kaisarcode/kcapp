@@ -200,7 +200,9 @@ Do not make `wvw` an implicit requirement of `kcapp`. A kcapp may be
 headless and consume kclibs without any WebView.
 
 The JavaScript bridge projects selected kclib scripting APIs rather than asking
-the application to write one Lua adapter per operation:
+the application to write one Lua adapter per operation. Runtime waiting or
+event-loop plumbing must remain internal to the shared runtime/launcher and
+must not appear in project Lua:
 
 ```lua
 kcapp.bridge(window, {"redp2p"})

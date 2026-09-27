@@ -151,6 +151,43 @@ static int kc_run_error(lua_State *state) {
 }
 
 /**
+ * Runs the optional kcapp runtime drain hook after main.lua returns.
+ * @param state Initialized Lua state.
+ * @return Zero on success or non-zero on failure.
+ */
+static int kc_run_drain(lua_State *state) {
+    int top = lua_gettop(state);
+
+    lua_getglobal(state, "package");
+    if (!lua_istable(state, -1)) {
+        lua_settop(state, top);
+        return 0;
+    }
+    lua_getfield(state, -1, "loaded");
+    if (!lua_istable(state, -1)) {
+        lua_settop(state, top);
+        return 0;
+    }
+    lua_getfield(state, -1, "kcapp");
+    if (!lua_istable(state, -1)) {
+        lua_settop(state, top);
+        return 0;
+    }
+    lua_getfield(state, -1, "_drain");
+    if (!lua_isfunction(state, -1)) {
+        lua_settop(state, top);
+        return 0;
+    }
+    if (lua_pcall(state, 0, 0, 0) != 0) {
+        kc_run_error(state);
+        lua_settop(state, top);
+        return 1;
+    }
+    lua_settop(state, top);
+    return 0;
+}
+
+/**
  * Starts src/main.lua from the executable directory.
  * @param argc Number of command-line arguments.
  * @param argv Command-line argument vector.
@@ -177,8 +214,10 @@ int kc_run_main(int argc, char **argv) {
     if (status == 0) status = lua_pcall(state, 0, LUA_MULTRET, 0);
     if (status != 0) {
         status = kc_run_error(state);
-        lua_close(state);
+    } else {
+        status = kc_run_drain(state);
     }
+    lua_close(state);
     return status;
 }
 

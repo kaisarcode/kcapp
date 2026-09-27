@@ -11,6 +11,7 @@ local raw_libraries = {}
 local descriptions = {}
 local modules = {}
 local object_cache = setmetatable({}, {__mode = "v"})
+local runtime_windows = {}
 local platform_cdef_ready = false
 
 local scalar_types = {
@@ -393,6 +394,7 @@ end
 
 local function invalidate_object(object)
     if type(object) ~= "table" then return end
+    runtime_windows[object] = nil
     if object._cache_key then
         object_cache[object._cache_key] = nil
     end
@@ -1288,7 +1290,9 @@ local function module_for(name)
                     local copy = {}
                     for option, value in pairs(options) do copy[option] = value end
                     copy.url = file_url(copy.url or "src/www/index.html")
-                    return invoke(name, info, nil, copy)
+                    local window, status = invoke(name, info, nil, copy)
+                    if window then runtime_windows[window] = true end
+                    return window, status
                 end
             else
                 fn = function(...)
@@ -1309,14 +1313,26 @@ function kcapp.load(name)
     return module_for(name)
 end
 
-function kcapp.run(window)
-    if not object_valid(window) or window._type ~= "kc_wvw_t" then
-        error("kcapp.run: expected wvw window", 2)
-    end
+function kcapp.bridge(window, libraries)
+    return require("bridge").install(window, libraries)
+end
+
+function kcapp._drain()
+    if next(runtime_windows) == nil then return end
 
     ensure_platform_cdef()
     local wvw = raw_library("wvw")
-    while wvw.kc_wvw_is_visible(window._ptr) == 1 do
+
+    while true do
+        local active = false
+        for window in pairs(runtime_windows) do
+            if object_valid(window) and wvw.kc_wvw_is_visible(window._ptr) == 1 then
+                active = true
+                break
+            end
+        end
+        if not active then break end
+
         if ffi.os == "Windows" then
             ffi.C.Sleep(50)
         else
@@ -1325,16 +1341,15 @@ function kcapp.run(window)
     end
 
     local loaded_bridge = package.loaded.bridge
-    if loaded_bridge and loaded_bridge.release then
-        loaded_bridge.release(window)
+    for window in pairs(runtime_windows) do
+        if loaded_bridge and loaded_bridge.release then
+            loaded_bridge.release(window)
+        end
+        if object_valid(window) then
+            window:close()
+        end
     end
-    if object_valid(window) then
-        window:close()
-    end
-end
-
-function kcapp.bridge(window, libraries)
-    return require("bridge").install(window, libraries)
+    runtime_windows = {}
 end
 
 function kcapp._raw(name)

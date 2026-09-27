@@ -20,4 +20,3 @@ if not window then
 end
 
 kcapp.bridge(window, {"redp2p"})
-kcapp.run(window)

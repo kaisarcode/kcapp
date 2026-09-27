@@ -88,11 +88,11 @@ end
 the same kclib scripting layer without loading `wvw`.
 
 A WebView can expose selected kclibs without writing a Lua adapter for every
-operation:
+operation. The launcher keeps the native runtime alive after `main.lua`
+returns while registered visual resources remain active:
 
 ```lua
 kcapp.bridge(window, {"redp2p"})
-kcapp.run(window)
 ```
 
 JavaScript receives the projected namespace:
