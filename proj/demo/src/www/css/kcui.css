@@ -257,6 +257,39 @@ dialog >:last-child {
     margin-bottom: 0;
 }
 
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--bd-sys) var(--bg-sys);
+}
+
+*::-webkit-scrollbar {
+  width: var(--pad);
+  height: var(--pad);
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--bg-sys);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--bd-sys);
+  border-radius: var(--rad);
+}
+
+*::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:active {
+  background: var(--bd-sys);
+}
+
+*::-webkit-scrollbar-track:hover,
+*::-webkit-scrollbar-track:active {
+  background: var(--bg-sys);
+}
+
+*::-webkit-scrollbar-corner {
+  background: var(--bg-sys);
+}
+
 /* Panels */
 .pnl {
     display: flex;
