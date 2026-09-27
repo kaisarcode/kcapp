@@ -354,7 +354,8 @@ Keep each project README specific to the actual application. Do not use a generi
 
 * Resolve `<arch>/<platform>` from the target.
 * Resolve kclib dependencies as `$(KCLIB_DIST_DIR)/NAME.c/<arch>/<platform>/`.
-* Select `libNAME.cdef` and the platform shared library (`.so`, `.dll`, `.dylib`).
+* Select `libNAME.h` and the platform shared library (`.so`, `.dll`, `.dylib`).
+* Generate `libNAME.cdef` from the distributed public header during kcapp composition, only for declared dependencies and the target being built.
 * Compile the shared launcher against the target's prebuilt LuaJIT shared library and copy only the required LuaJIT runtime library.
 * Do not copy the standalone `luajit` or `luajit.exe` executable into application output.
 * If a target directory or any required artifact is missing, fail clearly.
