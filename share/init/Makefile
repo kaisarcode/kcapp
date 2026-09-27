@@ -22,6 +22,7 @@ SHARE_LUA_DIR := $(PROJECT_DIR)/../../share/lua
 OUT_DIR := $(PROJECT_DIR)/bin
 RUN_C := $(PROJECT_DIR)/../../share/run/run.c
 RUN_INCLUDE_DIR := $(PROJECT_DIR)/../../share/run
+CDEF_SCRIPT := $(PROJECT_DIR)/../../scripts/cdef.sh
 
 KC_LIBS := $(if $(wildcard $(CONFIG)),$(shell awk -v key='"kclib"' '{ buf = buf " " $$0 } END { if (match(buf, key "[[:space:]]*:[[:space:]]*\\[")) { s = substr(buf, RSTART + RLENGTH); while (match(s, /"[^"]*"/)) { v = substr(s, RSTART + 1, RLENGTH - 2); print v; s = substr(s, RSTART + RLENGTH) } } }' "$(CONFIG)"),)
 PLATFORM_EXT_linux := so
@@ -33,7 +34,7 @@ LUAJIT_RUNTIME_macos := libluajit.dylib
 LUAJIT_TARGETS := $(sort $(foreach p,linux windows macos,$(foreach f,$(wildcard $(LUAJIT_DIST_DIR)/*/$(p)/$(LUAJIT_RUNTIME_$(p))),$(patsubst %/,%,$(patsubst $(LUAJIT_DIST_DIR)/%,%,$(dir $f))))))
 
 define lib_available
-$(if $(and $(wildcard $(KCLIB_DIST_DIR)/$(1).c/$(2)/lib$(1).cdef),$(wildcard $(KCLIB_DIST_DIR)/$(1).c/$(2)/lib$(1).$(PLATFORM_EXT_$(notdir $(2))))),1)
+$(if $(and $(wildcard $(KCLIB_DIST_DIR)/$(1).c/$(2)/lib$(1).h),$(wildcard $(KCLIB_DIST_DIR)/$(1).c/$(2)/lib$(1).$(PLATFORM_EXT_$(notdir $(2))))),1)
 endef
 
 KC_LIB_COUNT := $(words $(KC_LIBS))
@@ -108,6 +109,7 @@ esac; \
 [ -f '$(SHARE_LUA_DIR)/kcapp.lua' ] || { echo "kcapp: missing shared Lua runtime: $(SHARE_LUA_DIR)/kcapp.lua" >&2; exit 1; }; \
 [ -f '$(SHARE_LUA_DIR)/bridge.lua' ] || { echo "kcapp: missing shared bridge template: $(SHARE_LUA_DIR)/bridge.lua" >&2; exit 1; }; \
 [ -f '$(RUN_C)' ] || { echo "kcapp: missing launcher source: $(RUN_C)" >&2; exit 1; }; \
+[ -x '$(CDEF_SCRIPT)' ] || { echo "kcapp: missing cdef generator: $(CDEF_SCRIPT)" >&2; exit 1; }; \
 [ -f '$(LUAJIT_INCLUDE_DIR)/lua.h' ] || { echo "kcapp: missing LuaJIT headers: $(LUAJIT_INCLUDE_DIR)" >&2; exit 1; }; \
 case "$$platform" in \
 linux) lext='.so'; runtime='libluajit.so'; executable='$(PROJECT_NAME)'; \
@@ -134,11 +136,13 @@ windows) [ -f "$$ltarget/libluajit.dll.a" ] || { echo "kcapp: missing LuaJIT lin
 macos) cp "$$ltarget/$$runtime" "$$out/"; "$$compiler" -std=c11 -I'$(LUAJIT_INCLUDE_DIR)' -I'$(RUN_INCLUDE_DIR)' '$(RUN_C)' -L"$$ltarget" -Wl,-rpath,@loader_path -lluajit -o "$$out/$$executable" ;; \
 esac; \
 for dep in $(KC_LIBS); do \
- 	ddir='$(KCLIB_DIST_DIR)/'"$$dep"'.c/'"$$arch"'/'"$$platform"; \
- 	cdef="$$ddir/lib$$dep.cdef"; lib="$$ddir/lib$$dep$$lext"; \
- 	[ -f "$$cdef" ] || { echo "kcapp: missing cdef for $$dep: $$cdef" >&2; exit 1; }; \
- 	[ -f "$$lib" ] || { echo "kcapp: missing shared library for $$dep: $$lib" >&2; exit 1; }; \
- 	cp "$$cdef" "$$lib" "$$out/lib/"; \
+ 	ddir='$(KCLIB_DIST_DIR)/'"$dep"'.c/'"$arch"'/'"$platform"; \
+ 	header="$ddir/lib$dep.h"; lib="$ddir/lib$dep$lext"; cdef="$out/lib/lib$dep.cdef"; \
+ 	[ -f "$header" ] || { echo "kcapp: missing public header for $dep: $header" >&2; exit 1; }; \
+ 	[ -f "$lib" ] || { echo "kcapp: missing shared library for $dep: $lib" >&2; exit 1; }; \
+ 	'$(CDEF_SCRIPT)' "$header" "$platform" > "$cdef.tmp" || { rm -f "$cdef.tmp"; echo "kcapp: failed to generate cdef for $dep" >&2; exit 1; }; \
+ 	mv "$cdef.tmp" "$cdef"; \
+ 	cp "$lib" "$out/lib/"; \
  done; \
 if [ "$$target" = "$(NATIVE_TARGET)" ]; then \
 	link='$(PROJECT_DIR)/'"$$executable"; \
