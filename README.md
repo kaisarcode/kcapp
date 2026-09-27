@@ -67,16 +67,25 @@ local redp2p = kcapp.load("redp2p")
 print(redp2p.version())
 ```
 
-Desktop window setup also stays at the scripting level:
+A visual application loads `wvw` exactly like any other kclib:
 
 ```lua
-local window = kcapp.open({
+local wvw = kcapp.load("wvw")
+
+local window, status = wvw.open({
     url = "src/www/index.html",
     title = "Demo",
     width = 900,
     height = 700
 })
+
+if not window then
+    error("wvw status " .. tostring(status))
+end
 ```
+
+`kcapp` itself does not require or imply a GUI. Headless applications can use
+the same kclib scripting layer without loading `wvw`.
 
 A WebView can expose selected kclibs without writing a Lua adapter for every
 operation:

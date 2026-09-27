@@ -1230,38 +1230,6 @@ local function script_signature(lib_name, info)
     return parameters
 end
 
-local function module_for(name)
-    local desc = description(name)
-    local module = {}
-
-    for public_name, constant_name in pairs(desc.constants) do
-        local ok, value = pcall(function() return tonumber(ffi.C[constant_name]) end)
-        if ok then module[public_name] = value end
-    end
-
-    setmetatable(module, {
-        __index = function(_, key)
-            local info = desc.functions[key]
-            if key == "free" or not info or info.receiver_type then
-                return nil
-            end
-            local fn = function(...)
-                return invoke(name, info, nil, ...)
-            end
-            rawset(module, key, fn)
-            return fn
-        end
-    })
-
-    modules[name] = module
-    return module
-end
-
-function kcapp.load(name)
-    if modules[name] then return modules[name] end
-    return module_for(name)
-end
-
 local function ensure_platform_cdef()
     if platform_cdef_ready then return end
     if ffi.os == "Windows" then
@@ -1297,17 +1265,48 @@ local function file_url(path)
     return "file://" .. root .. "/" .. path
 end
 
-function kcapp.open(options)
-    options = options or {}
-    local copy = {}
-    for key, value in pairs(options) do copy[key] = value end
-    copy.url = file_url(copy.url or "src/www/index.html")
 
-    local window, status = kcapp.load("wvw").open(copy)
-    if not window then
-        error("kcapp: cannot open window (status " .. tostring(status) .. ")", 2)
+local function module_for(name)
+    local desc = description(name)
+    local module = {}
+
+    for public_name, constant_name in pairs(desc.constants) do
+        local ok, value = pcall(function() return tonumber(ffi.C[constant_name]) end)
+        if ok then module[public_name] = value end
     end
-    return window
+
+    setmetatable(module, {
+        __index = function(_, key)
+            local info = desc.functions[key]
+            if key == "free" or not info or info.receiver_type then
+                return nil
+            end
+            local fn
+            if name == "wvw" and key == "open" then
+                fn = function(options)
+                    options = options or {}
+                    local copy = {}
+                    for option, value in pairs(options) do copy[option] = value end
+                    copy.url = file_url(copy.url or "src/www/index.html")
+                    return invoke(name, info, nil, copy)
+                end
+            else
+                fn = function(...)
+                    return invoke(name, info, nil, ...)
+                end
+            end
+            rawset(module, key, fn)
+            return fn
+        end
+    })
+
+    modules[name] = module
+    return module
+end
+
+function kcapp.load(name)
+    if modules[name] then return modules[name] end
+    return module_for(name)
 end
 
 function kcapp.run(window)

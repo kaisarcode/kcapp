@@ -183,16 +183,21 @@ local redp2p = kcapp.load("redp2p")
 local version = redp2p.version()
 ```
 
-Window setup is also scripting-level:
+A visual project loads `wvw` through the same kclib surface:
 
 ```lua
-local window = kcapp.open({
+local wvw = kcapp.load("wvw")
+
+local window, status = wvw.open({
     url = "src/www/index.html",
     title = "Demo",
     width = 900,
     height = 700
 })
 ```
+
+Do not make `wvw` an implicit requirement of `kcapp`. A kcapp may be
+headless and consume kclibs without any WebView.
 
 The JavaScript bridge projects selected kclib scripting APIs rather than asking
 the application to write one Lua adapter per operation:
