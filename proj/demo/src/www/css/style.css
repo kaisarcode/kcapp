@@ -1,10 +1,9 @@
-* {
-  box-sizing: border-box;
+:root {
+  --max: 800px;
 }
 
-body {
-  margin: 0;
-  font-family: system-ui, sans-serif;
-  background: #101418;
-  color: #dde3ea;
+#output {
+  max-height: 60vh;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
