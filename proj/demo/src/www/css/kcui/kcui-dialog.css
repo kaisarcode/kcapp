@@ -1,0 +1,54 @@
+/**
+ * KCUI - KCUI Dialog Component
+ * Summary: Transitions and positional behavior for dialog element.
+ *
+ * Author: KaisarCode
+ * Website: https://kaisarcode.com
+ * License: GNU General Public License v3.0
+ * License URL: https://www.gnu.org/licenses/gpl-3.0.txt
+ */
+
+dialog, .dlg {
+    --dlg-open-opacity: 1;
+    --dlg-closed-opacity: 0;
+    --dlg-open-transform: none;
+    --dlg-closed-transform: none;
+    --dlg-backdrop-open-opacity: 1;
+    --dlg-backdrop-closed-opacity: 0;
+    display: flex;
+    opacity: var(--dlg-closed-opacity);
+    transform: var(--dlg-closed-transform);
+}
+
+dialog[open], .dlg[open] {
+    top: 0;
+    opacity: var(--dlg-open-opacity);
+    transform: var(--dlg-open-transform);
+}
+
+dialog::backdrop {
+    left: 0;
+    top: -100%;
+    width: 100%;
+    height: 100%;
+    position: fixed;
+    opacity: var(--dlg-backdrop-closed-opacity);
+    background: rgba(0, 0, 0, 0.5);
+}
+
+dialog[open]::backdrop {
+    top: 0;
+    opacity: var(--dlg-backdrop-open-opacity);
+}
+
+/* Transitions */
+@media (prefers-reduced-motion: no-preference) {
+    dialog, .dlg {
+        --dlg-open-transform: scale(1);
+        --dlg-closed-transform: scale(0);
+        transition: transform 0.2s ease, opacity 0.2s ease, top 0s 0.2s;
+    }
+    dialog[open], .dlg[open] {
+        transition: transform 0.2s ease, opacity 0.2s ease, top 0s 0s;
+    }
+}
