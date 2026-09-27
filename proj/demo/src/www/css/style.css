@@ -23,7 +23,16 @@
 
 *::-webkit-scrollbar-thumb:hover,
 *::-webkit-scrollbar-thumb:active {
-  background: var(--bd);
+  background: var(--bd-sys);
+}
+
+*::-webkit-scrollbar-track:hover,
+*::-webkit-scrollbar-track:active {
+  background: var(--bg-sys);
+}
+
+*::-webkit-scrollbar-corner {
+  background: var(--bg-sys);
 }
 
 #output {
