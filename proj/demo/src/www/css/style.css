@@ -2,6 +2,30 @@
   --max: 800px;
 }
 
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--bd-sys) var(--bg-sys);
+}
+
+*::-webkit-scrollbar {
+  width: var(--pad);
+  height: var(--pad);
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--bg-sys);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--bd-sys);
+  border: calc(var(--bdw) * 2) solid var(--bg-sys);
+  border-radius: var(--rad);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--bg-prm);
+}
+
 #output {
   max-height: 60vh;
   white-space: pre-wrap;
