@@ -1,16 +1,19 @@
 # Demo
 
-Demo is a small graphical application that opens a native WebView and displays
-the build version of the bundled redp2p library.
+Demo is a small graphical application that opens a native WebView and checks
+the bundled desktop kclib libraries.
 
 ## What it does
 
-When started, Demo opens a window and requests the redp2p build version from its
-local backend. On success, the page displays:
+When started, Demo opens a window and requests the build version of every
+bundled kclib except the WebView library that hosts the application. On
+success, the page displays each version and a small HTTP byte-projection check:
 
 ```text
-redp2p version: <timestamp>
-NativeBridge loaded successfully.
+b64 version: <timestamp>
+...
+http request bytes: 61
+All kcapp kclib bridge tests passed.
 ```
 
 If the request fails, the page displays the reported error instead.

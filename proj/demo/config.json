@@ -1,3 +1,26 @@
 {
-  "kclib": ["wvw", "redp2p"]
+  "kclib": [
+    "b64",
+    "demo",
+    "dmn",
+    "emb",
+    "flow",
+    "hnsw",
+    "http",
+    "init",
+    "lng",
+    "mdp",
+    "min",
+    "mmap",
+    "netl",
+    "nets",
+    "ngram",
+    "redp2p",
+    "tpl",
+    "tpm",
+    "tray",
+    "trust",
+    "wch",
+    "wvw"
+  ]
 }

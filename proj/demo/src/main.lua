@@ -19,4 +19,26 @@ if not window then
     error("wvw status " .. tostring(status))
 end
 
-kcapp.bridge(window, {"redp2p"})
+kcapp.bridge(window, {
+    "b64",
+    "demo",
+    "dmn",
+    "emb",
+    "flow",
+    "hnsw",
+    "http",
+    "init",
+    "lng",
+    "mdp",
+    "min",
+    "mmap",
+    "netl",
+    "nets",
+    "ngram",
+    "redp2p",
+    "tpl",
+    "tpm",
+    "tray",
+    "trust",
+    "wch"
+})
