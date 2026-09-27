@@ -488,7 +488,7 @@ function bridge.install(window, libraries)
         end
 
         for operation, info in pairs(description.functions) do
-            if not info.receiver_type then
+            if operation ~= "free" and not info.receiver_type then
                 local signature = kcapp._signature(name, operation)
                 if not has_callback(signature) then
                     methods[#methods + 1] = operation

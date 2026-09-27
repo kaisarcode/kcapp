@@ -1192,7 +1192,7 @@ local function module_for(name)
     setmetatable(module, {
         __index = function(_, key)
             local info = desc.functions[key]
-            if not info or info.receiver_type then
+            if key == "free" or not info or info.receiver_type then
                 return nil
             end
             local fn = function(...)
