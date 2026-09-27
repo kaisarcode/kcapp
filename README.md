@@ -325,7 +325,7 @@ With the repositories together under one parent directory, a bare `make` works. 
 make KCLIB_DIST_DIR=/abs/path/kclib/dist x86_64/linux
 ```
 
-For dependency `NAME` and target `<arch>/<platform>`, `kcapp` selects `libNAME.cdef` and the platform shared library:
+For dependency `NAME` and target `<arch>/<platform>`, `kcapp` selects the distributed public header and platform shared library, then generates `libNAME.cdef` for that application target:
 
 | platform | kclib inputs                    |
 | :------- | :------------------------------ |
