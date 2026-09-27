@@ -1,6 +1,6 @@
 # kcapp
 
-`kcapp` is a small desktop application environment built around Lua and optional WebView frontends.
+`kcapp` is the desktop application environment for the KaisarCode ecosystem, built around Lua and optional WebView frontends.
 
 Applications live under `proj/`, use Lua as their main runtime, and can consume native capabilities from kclib without writing native bindings.
 
