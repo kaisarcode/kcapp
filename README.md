@@ -27,7 +27,7 @@ proj/myapp/
 
 `src/main.lua` is the application entry point.
 
-Put the rest of the application under `src/`: Lua modules, HTML, CSS,
+The rest of the application lives under `src/`: Lua modules, HTML, CSS,
 JavaScript, templates, configuration, images, and other resources.
 
 ## Hello world
@@ -40,25 +40,25 @@ local kcapp = require("kcapp")
 print("Hello from kcapp")
 ```
 
-Build it from the project directory:
+A project can be built from its directory with:
 
 ```sh
 cd proj/myapp
 make
 ```
 
-Then run the generated application from its target directory.
+The generated application is then available from its target directory.
 
 ## Using kclibs
 
 Kclibs provide reusable native capabilities such as HTTP handling, networking,
 templates, Markdown, storage, WebView, tray integration, local AI, and more.
 
-Browse the catalog here:
+The library catalog is available here:
 
 https://github.com/kaisarcode/kclib/blob/master/INDEX.md
 
-Declare every library your application uses in `config.json`:
+Libraries used by the application are declared in `config.json`:
 
 ```json
 {
@@ -66,7 +66,7 @@ Declare every library your application uses in `config.json`:
 }
 ```
 
-Load a declared library from Lua:
+A declared library is loaded from Lua like this:
 
 ```lua
 local kcapp = require("kcapp")
@@ -86,7 +86,7 @@ The Lua API uses normal scripting values and objects. Application code does not
 need to deal with native pointers, C structs, allocation functions, or FFI
 details.
 
-For the exact operations offered by a library, read its README under:
+The exact operations offered by a library are documented in its README under:
 
 ```text
 kclib/proj/NAME.c/README.md
@@ -205,7 +205,7 @@ Generated builds are written under:
 proj/myapp/bin/<arch>/<platform>/
 ```
 
-Do not edit generated build output.
+Generated build output is not application source.
 
 ## Package applications
 
@@ -240,21 +240,16 @@ At minimum it declares the kclibs used by the application:
 }
 ```
 
-Add only the libraries the application actually needs.
+The list normally contains only the libraries used by the application.
 
 ## Project README
 
-Each application has its own `README.md`.
-
-Write it for the people using the application. Describe what the app does, how
-to start it, important features, user-visible files or permissions, and relevant
-limitations.
-
-Development details about kcapp itself do not belong in an application README.
+Applications created by kcapp include their own `README.md` alongside the
+project configuration and source tree.
 
 ## Example
 
 `proj/demo/` contains a complete example showing Lua, a WebView frontend, and
 kclib calls from JavaScript.
 
-Use it as a reference when you need a working example.
+It serves as a working reference implementation.
