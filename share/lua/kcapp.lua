@@ -695,6 +695,7 @@ end
 local function callback_arguments(lib_name, callback, native_args)
     local desc = description(lib_name)
     local values = {n = 0}
+    local outputs = {}
     local function push(value)
         values.n = values.n + 1
         values[values.n] = value
@@ -706,6 +707,12 @@ local function callback_arguments(lib_name, callback, native_args)
         local native = native_args[index]
 
         if parameter.name == "userdata" then
+            index = index + 1
+        elseif is_output(parameter) then
+            outputs[#outputs + 1] = {
+                parameter = parameter,
+                native = native
+            }
             index = index + 1
         elseif pair_kind and parameter.base == "void" then
             local count = scalar_from_c(native_args[index + 1])
@@ -732,7 +739,33 @@ local function callback_arguments(lib_name, callback, native_args)
             index = index + 1
         end
     end
-    return values
+    return values, outputs
+end
+
+local function assign_callback_output(lib_name, output, value)
+    local parameter = output.parameter
+    local native = output.native
+    local desc = description(lib_name)
+
+    if parameter.pointers == 1 and scalar_types[parameter.base] then
+        native[0] = scalar_value(value)
+        return
+    end
+    if parameter.base == "char" and parameter.pointers == 2 then
+        native[0] = value
+        return
+    end
+    if desc.opaque[parameter.base] and parameter.pointers == 2 then
+        if value == nil then
+            native[0] = nil
+        elseif object_valid(value) and value._type == parameter.base then
+            native[0] = value._ptr
+        else
+            error("kcapp: callback output expects " .. parameter.base, 3)
+        end
+        return
+    end
+    error("kcapp: unsupported callback output " .. parameter.name, 3)
 end
 
 make_callback = function(lib_name, type_name, handler, keep)
@@ -750,17 +783,30 @@ make_callback = function(lib_name, type_name, handler, keep)
     local c_callback
     c_callback = ffi.cast(type_name, function(...)
         local native_args = {...}
-        local values = callback_arguments(lib_name, callback, native_args)
-        local ok, result = pcall(handler, unpack(values, 1, values.n))
-        if not ok then
-            io.stderr:write("kcapp callback error: " .. tostring(result) .. "\n")
+        local values, outputs = callback_arguments(lib_name, callback, native_args)
+        local results = {pcall(handler, unpack(values, 1, values.n))}
+        if not results[1] then
+            io.stderr:write("kcapp callback error: " .. tostring(results[2]) .. "\n")
             if base_type(callback.return_type) ~= "void" then return 0 end
             return
         end
+
+        local result_index = 2
+        local callback_result
+        if base_type(callback.return_type) ~= "void" then
+            callback_result = results[result_index]
+            result_index = result_index + 1
+        end
+
+        for _, output in ipairs(outputs) do
+            assign_callback_output(lib_name, output, results[result_index])
+            result_index = result_index + 1
+        end
+
         if base_type(callback.return_type) == "void" then
             return
         end
-        return scalar_value(result or 0)
+        return scalar_value(callback_result or 0)
     end)
     keep._callbacks = keep._callbacks or {}
     keep._callbacks[#keep._callbacks + 1] = c_callback
