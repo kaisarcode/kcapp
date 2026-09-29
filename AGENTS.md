@@ -48,7 +48,7 @@ For the exact behavior and public API of a library, read its project
 documentation under:
 
 ```text
-https://github.com/kaisarcode/kclib/tree/master/proj/NAME.c
+https://github.com/kaisarcode/kclib/tree/master/proj/libNAME.c
 ```
 
 Declare every kclib used by the application in `config.json`:

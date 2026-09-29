@@ -34,7 +34,7 @@ LUAJIT_RUNTIME_macos := libluajit.dylib
 LUAJIT_TARGETS := $(sort $(foreach p,linux windows macos,$(foreach f,$(wildcard $(LUAJIT_DIST_DIR)/*/$(p)/$(LUAJIT_RUNTIME_$(p))),$(patsubst %/,%,$(patsubst $(LUAJIT_DIST_DIR)/%,%,$(dir $f))))))
 
 define lib_available
-$(if $(and $(wildcard $(KCLIB_DIST_DIR)/$(1).c/$(2)/lib$(1).h),$(wildcard $(KCLIB_DIST_DIR)/$(1).c/$(2)/lib$(1).$(PLATFORM_EXT_$(notdir $(2))))),1)
+$(if $(and $(wildcard $(KCLIB_DIST_DIR)/lib$(1).c/$(2)/lib$(1).h),$(wildcard $(KCLIB_DIST_DIR)/lib$(1).c/$(2)/lib$(1).$(PLATFORM_EXT_$(notdir $(2))))),1)
 endef
 
 KC_LIB_COUNT := $(words $(KC_LIBS))
@@ -136,7 +136,7 @@ windows) [ -f "$$ltarget/libluajit.dll.a" ] || { echo "kcapp: missing LuaJIT lin
 macos) cp "$$ltarget/$$runtime" "$$out/"; "$$compiler" -std=c11 -I'$(LUAJIT_INCLUDE_DIR)' -I'$(RUN_INCLUDE_DIR)' '$(RUN_C)' -L"$$ltarget" -Wl,-rpath,@loader_path -lluajit -o "$$out/$$executable" ;; \
 esac; \
 for dep in $(KC_LIBS); do \
- 	ddir='$(KCLIB_DIST_DIR)/'"$$dep"'.c/'"$$arch"'/'"$$platform"; \
+ 	ddir='$(KCLIB_DIST_DIR)/lib'"$dep"'.c/'"$$arch"'/'"$$platform"; \
  	header="$$ddir/lib$$dep.h"; lib="$$ddir/lib$$dep$$lext"; cdef="$$out/lib/lib$$dep.cdef"; \
  	[ -f "$$header" ] || { echo "kcapp: missing public header for $$dep: $$header" >&2; exit 1; }; \
  	[ -f "$$lib" ] || { echo "kcapp: missing shared library for $$dep: $$lib" >&2; exit 1; }; \

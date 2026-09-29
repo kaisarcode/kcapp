@@ -89,7 +89,7 @@ details.
 The exact operations offered by a library are documented in its README under:
 
 ```text
-kclib/proj/NAME.c/README.md
+kclib/proj/libNAME.c/README.md
 ```
 
 ## Visual applications
